@@ -29,7 +29,11 @@ export type PolicyResult = {
 
 export const defaultPolicy: ClearXPolicy = {
   maxTransferAmount: 100,
-  allowedRecipients: ["0x7A3...91F2", "0xD6aa751524A94161eAdfF44047266Fa8586F7A77"],
+  allowedRecipients: [
+    "0x7A3...91F2",
+    "0xD6aa751524A94161eAdfF44047266Fa8586F7A77",
+    "0xd65Bb2dC678d9f192B5f69Ded613c22C5eF6A6B3",
+  ],
   allowedNetworks: ["X Layer"],
   allowedActions: ["TRANSFER", "SWAP"],
 };

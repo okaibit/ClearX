@@ -1,0 +1,20 @@
+{
+  "network": "X Layer Testnet",
+  "chainId": 1952,
+  "deployer": "0xD6aa751524A94161eAdfF44047266Fa8586F7A77",
+  "contracts": {
+    "TestUSDC": {
+      "address": "0x771fe2efa6208a738cafb7a06c0d272d8eae6d70",
+      "transactionHash": "0x662766a08ab35957b04d4466c494b07bfa191a23daa980f01692c1a83b047f48"
+    },
+    "AgenticCommerce": {
+      "address": "0x3b92251ab1caa54c755595c77126319fe02a5dc5",
+      "transactionHash": "0x1b4ff5033fb2f534ecb66caab7bd085b5cefd0c1a3c4b774a725036938c2b678"
+    },
+    "ClearXEvaluator": {
+      "address": "0xd75d6cdf537e1ea30d2c7b03a1b1eafebc7d2ac9",
+      "transactionHash": "0xc24a4d6b2951f1997347fba3eb23588d3fd81f9d729baa6dbdb7fb63d03c1243"
+    }
+  },
+  "deployedAt": "2026-08-15T03:58:52.121Z"
+}

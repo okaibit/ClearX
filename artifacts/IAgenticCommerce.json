@@ -1,0 +1,53 @@
+{
+  "contractName": "IAgenticCommerce",
+  "sourceName": "contracts/ClearXEvaluator.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "jobId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "reason",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes",
+          "name": "optParams",
+          "type": "bytes"
+        }
+      ],
+      "name": "complete",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "jobId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "reason",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes",
+          "name": "optParams",
+          "type": "bytes"
+        }
+      ],
+      "name": "reject",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x"
+}

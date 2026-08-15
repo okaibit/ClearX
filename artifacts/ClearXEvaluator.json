@@ -1,0 +1,110 @@
+{
+  "contractName": "ClearXEvaluator",
+  "sourceName": "contracts/ClearXEvaluator.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "commerce_",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "Unauthorized",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "jobId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "evidenceHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "approved",
+          "type": "bool"
+        }
+      ],
+      "name": "EvidenceVerified",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "jobId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "evidenceHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "approve",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "commerce",
+      "outputs": [
+        {
+          "internalType": "contract IAgenticCommerce",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "jobId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "evidenceHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "reject",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x60a060405234801561000f575f5ffd5b5060405161039938038061039983398101604081905261002e91610076565b6001600160a01b038116610054576040516282b42960e81b815260040160405180910390fd5b5f80546001600160a01b031916331790556001600160a01b03166080526100a3565b5f60208284031215610086575f5ffd5b81516001600160a01b038116811461009c575f5ffd5b9392505050565b6080516102d16100c85f395f8181609601528181610155015261024401526102d15ff3fe608060405234801561000f575f5ffd5b506004361061004a575f3560e01c80636be1320b1461004e5780638da5cb5b14610063578063912955fd1461009157806393cdd68b146100b8575b5f5ffd5b61006161005c36600461027b565b6100cb565b005b5f54610075906001600160a01b031681565b6040516001600160a01b03909116815260200160405180910390f35b6100757f000000000000000000000000000000000000000000000000000000000000000081565b6100616100c636600461027b565b6101b9565b5f546001600160a01b031633146100f4576040516282b42960e81b815260040160405180910390fd5b6040515f8152819083907f5c61a5d1db1575d6909ff92e8c05b5e155061c649e54f68b40dc2c1e69b08fe09060200160405180910390a36040516341dd26f560e01b81526004810183905260248101829052606060448201525f60648201527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316906341dd26f5906084015b5f604051808303815f87803b15801561019f575f5ffd5b505af11580156101b1573d5f5f3e3d5ffd5b505050505050565b5f546001600160a01b031633146101e2576040516282b42960e81b815260040160405180910390fd5b60405160018152819083907f5c61a5d1db1575d6909ff92e8c05b5e155061c649e54f68b40dc2c1e69b08fe09060200160405180910390a360405163d75bbdf360e01b81526004810183905260248101829052606060448201525f60648201527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03169063d75bbdf390608401610188565b5f5f6040838503121561028c575f5ffd5b5050803592602090910135915056fea26469706673582212203ffd18aa53b2e62497731deacef1958931c83090131f8f9f1d72ffc6475ff8d564736f6c634300081e0033"
+}
