@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { evaluateAction } from "@/lib/clearx/policy";
+import { createAuditEvent } from "@/lib/clearx/audit";
 
 type Theme = "light" | "dark";
 
@@ -9,6 +10,7 @@ export default function Home() {
  const [theme, setTheme] = useState<Theme>("dark");
  const [amount, setAmount] = useState(250);
  const [recipient, setRecipient] = useState("0x7A3...91F2");
+ const [auditEvent, setAuditEvent] = useState<ReturnType<typeof createAuditEvent> | null>(null);
 
  const decision = evaluateAction({
    type: "TRANSFER",
@@ -17,6 +19,24 @@ export default function Home() {
    recipient,
    network: "Base",
  });
+
+ useEffect(() => {
+   const event = createAuditEvent(
+     "Treasury Agent",
+     {
+       type: "TRANSFER",
+       amount,
+       asset: "USDC",
+       recipient,
+       network: "Base",
+     },
+     decision,
+   );
+
+   setAuditEvent(event);
+   // The action inputs are the actual audit triggers.
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [amount, recipient]);
 
  useEffect(() => {
  const saved = localStorage.getItem("clearx-theme") as Theme | null;
@@ -155,6 +175,31 @@ export default function Home() {
                     </select>
                   </label>
 
+                  <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                    <div>
+                      <p className="text-xs text-[var(--muted)]">
+                        Recipient policy
+                      </p>
+                      <p className="mt-1 text-sm font-medium">
+                        {recipient === "0x7A3...91F2"
+                          ? "Allowlisted recipient"
+                          : "Unknown recipient"}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-xs font-semibold ${
+                        recipient === "0x7A3...91F2"
+                          ? "text-emerald-500"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {recipient === "0x7A3...91F2"
+                        ? "✓ Allowed"
+                        : "× Blocked"}
+                    </span>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
                       <p className="text-xs text-[var(--muted)]">Network</p>
@@ -243,6 +288,117 @@ export default function Home() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-28 lg:px-8">
+        <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-7 lg:p-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+                Audit trail
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight">
+                Decision record
+              </h2>
+            </div>
+
+            <span className="rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)]">
+              {auditEvent ? "Recorded" : "Waiting"}
+            </span>
+          </div>
+
+          {auditEvent && (
+            <>
+              <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl border border-[var(--border)] p-4">
+                  <p className="text-xs text-[var(--muted)]">Agent</p>
+                  <p className="mt-2 text-sm font-medium">
+                    {auditEvent.agent}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border)] p-4">
+                  <p className="text-xs text-[var(--muted)]">Action</p>
+                  <p className="mt-2 text-sm font-medium">
+                    Transfer {auditEvent.action.amount} {auditEvent.action.asset}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border)] p-4">
+                  <p className="text-xs text-[var(--muted)]">Decision</p>
+                  <p
+                    className={`mt-2 text-sm font-semibold ${
+                      auditEvent.decision === "APPROVE"
+                        ? "text-emerald-500"
+                        : auditEvent.decision === "REVIEW"
+                          ? "text-amber-500"
+                          : "text-red-500"
+                    }`}
+                  >
+                    {auditEvent.decision}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border)] p-4">
+                  <p className="text-xs text-[var(--muted)]">Timestamp</p>
+                  <p className="mt-2 text-sm font-medium">
+                    {new Date(auditEvent.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-[var(--border)] p-4">
+                <p className="text-xs text-[var(--muted)]">
+                  Decision reason
+                </p>
+                <p className="mt-2 text-sm">{auditEvent.reason}</p>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-[var(--border)] p-4">
+                <p className="text-xs text-[var(--muted)]">Policy checks</p>
+
+                <div className="mt-4 space-y-3">
+                  {auditEvent.checks.map((check) => (
+                    <div
+                      key={check.name}
+                      className="flex items-center justify-between gap-4"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{check.name}</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          {check.reason}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`shrink-0 text-xs font-semibold ${
+                          check.status === "PASSED"
+                            ? "text-emerald-500"
+                            : check.status === "REVIEW"
+                              ? "text-amber-500"
+                              : "text-red-500"
+                        }`}
+                      >
+                        {check.status === "PASSED"
+                          ? "✓ Passed"
+                          : check.status === "REVIEW"
+                            ? "! Review"
+                            : "× Blocked"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-[var(--border)] p-4">
+                <p className="text-xs text-[var(--muted)]">Event ID</p>
+                <p className="mt-2 break-all font-mono text-xs">
+                  {auditEvent.id}
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </section>
 
