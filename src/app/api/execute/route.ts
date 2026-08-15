@@ -89,18 +89,28 @@ export async function POST(request: Request) {
       value: amount,
     });
 
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+    });
+
+    const verified = receipt.status === "success";
+
     return NextResponse.json({
       ...result,
-      execution: "BROADCASTED",
+      execution: verified ? "VERIFIED_ONCHAIN" : "BROADCASTED",
       executor: account.address,
       network: "X Layer Testnet",
       chainId: 1952,
       broadcasted: true,
+      verifiedOnchain: verified,
       transactionHash: hash,
+      blockNumber: receipt.blockNumber.toString(),
+      transactionIndex: receipt.transactionIndex,
       recipient: TESTNET_EXECUTION_RECIPIENT,
       value: `${action.amount} OKB`,
-      message:
-        "ClearX approved the action and broadcast the approved OKB transfer on X Layer Testnet.",
+      message: verified
+        ? "ClearX approved the action and verified the successful transaction on X Layer Testnet."
+        : "ClearX broadcast the transaction, but on-chain verification did not report success.",
     });
   } catch (error) {
     console.error("ClearX execution error:", error);

@@ -17,6 +17,14 @@ export default function Home() {
    transactionHash?: string;
    message?: string;
    error?: string;
+   executor?: string;
+   network?: string;
+   chainId?: number;
+   recipient?: string;
+   value?: string;
+   verifiedOnchain?: boolean;
+   blockNumber?: string;
+   transactionIndex?: number;
  } | null>(null);
 
  const decision = evaluateAction({
@@ -343,34 +351,166 @@ export default function Home() {
                 </button>
 
                 {executionResult && (
-                  <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
-                      X Layer execution
-                    </p>
-
-                    <p
-                      className={`mt-2 text-sm font-semibold ${
-                        executionResult.error
-                          ? "text-red-500"
-                          : executionResult.execution === "BROADCASTED"
-                            ? "text-emerald-500"
-                            : "text-[var(--foreground)]"
-                      }`}
-                    >
-                      {executionResult.error ??
-                        executionResult.execution ??
-                        executionResult.message}
-                    </p>
-
-                    {executionResult.transactionHash && (
-                      <div className="mt-3">
-                        <p className="text-xs text-[var(--muted)]">
-                          Transaction hash
+                  <div
+                    className={`mt-4 rounded-2xl border p-5 ${
+                      executionResult.error
+                        ? "border-red-500/20 bg-red-500/5"
+                        : executionResult.execution === "BROADCASTED"
+                          ? "border-emerald-500/20 bg-emerald-500/5"
+                          : "border-[var(--border)] bg-[var(--surface)]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
+                          X Layer execution
                         </p>
-                        <p className="mt-1 break-all font-mono text-xs">
-                          {executionResult.transactionHash}
+                        <p
+                          className={`mt-2 text-lg font-semibold ${
+                            executionResult.error
+                              ? "text-red-500"
+                              : executionResult.execution === "BROADCASTED"
+                                ? "text-emerald-500"
+                                : "text-[var(--foreground)]"
+                          }`}
+                        >
+                          {executionResult.error
+                            ? "Execution failed"
+                            : executionResult.execution === "BROADCASTED"
+                              ? "BROADCASTED"
+                              : executionResult.execution ?? "Processing"}
                         </p>
                       </div>
+
+                      {!executionResult.error &&
+                        (executionResult.execution === "BROADCASTED" ||
+                          executionResult.execution === "VERIFIED_ONCHAIN") && (
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                            ✓
+                          </div>
+                        )}
+                    </div>
+
+                    {executionResult.error ? (
+                      <p className="mt-3 text-sm text-[var(--muted)]">
+                        {executionResult.error}
+                      </p>
+                    ) : (
+                      <>
+                        {executionResult.message && (
+                          <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                            {executionResult.message}
+                          </p>
+                        )}
+
+                        {executionResult.transactionHash && (
+                          <div className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--background)] p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
+                                On-chain execution
+                              </p>
+                              <span className="text-xs font-semibold text-emerald-500">
+                                {executionResult.verifiedOnchain
+                                  ? "Verified on-chain"
+                                  : "Broadcasted"}
+                              </span>
+                            </div>
+
+                            <p className="mt-3 text-xs text-[var(--muted)]">
+                              Transaction hash
+                            </p>
+                            <p className="mt-1 break-all font-mono text-xs leading-5">
+                              {executionResult.transactionHash}
+                            </p>
+                          </div>
+                        )}
+
+                        {executionResult.verifiedOnchain && (
+                          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
+                                  On-chain verification
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-emerald-500">
+                                  Transaction verified successfully
+                                </p>
+                              </div>
+                              <span className="text-lg text-emerald-500">✓</span>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              {executionResult.blockNumber && (
+                                <div>
+                                  <p className="text-xs text-[var(--muted)]">
+                                    Block
+                                  </p>
+                                  <p className="mt-1 font-mono text-xs">
+                                    {executionResult.blockNumber}
+                                  </p>
+                                </div>
+                              )}
+
+                              {executionResult.transactionIndex !== undefined && (
+                                <div>
+                                  <p className="text-xs text-[var(--muted)]">
+                                    Transaction index
+                                  </p>
+                                  <p className="mt-1 font-mono text-xs">
+                                    {executionResult.transactionIndex}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {executionResult.network && (
+                            <div className="rounded-xl border border-[var(--border)] p-3">
+                              <p className="text-xs text-[var(--muted)]">
+                                Network
+                              </p>
+                              <p className="mt-1 text-sm font-medium">
+                                {executionResult.network}
+                              </p>
+                            </div>
+                          )}
+
+                          {executionResult.chainId && (
+                            <div className="rounded-xl border border-[var(--border)] p-3">
+                              <p className="text-xs text-[var(--muted)]">
+                                Chain ID
+                              </p>
+                              <p className="mt-1 text-sm font-medium">
+                                {executionResult.chainId}
+                              </p>
+                            </div>
+                          )}
+
+                          {executionResult.executor && (
+                            <div className="rounded-xl border border-[var(--border)] p-3">
+                              <p className="text-xs text-[var(--muted)]">
+                                Executor
+                              </p>
+                              <p className="mt-1 break-all font-mono text-xs">
+                                {executionResult.executor}
+                              </p>
+                            </div>
+                          )}
+
+                          {executionResult.value && (
+                            <div className="rounded-xl border border-[var(--border)] p-3">
+                              <p className="text-xs text-[var(--muted)]">
+                                Broadcast value
+                              </p>
+                              <p className="mt-1 text-sm font-medium">
+                                {executionResult.value}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
