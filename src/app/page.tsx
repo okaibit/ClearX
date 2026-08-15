@@ -8,16 +8,23 @@ type Theme = "light" | "dark";
 
 export default function Home() {
  const [theme, setTheme] = useState<Theme>("dark");
- const [amount, setAmount] = useState(250);
- const [recipient, setRecipient] = useState("0x7A3...91F2");
+ const [amount, setAmount] = useState(0.000001);
+ const [recipient, setRecipient] = useState("0xD6aa751524A94161eAdfF44047266Fa8586F7A77");
  const [auditEvent, setAuditEvent] = useState<ReturnType<typeof createAuditEvent> | null>(null);
+ const [executing, setExecuting] = useState(false);
+ const [executionResult, setExecutionResult] = useState<{
+   execution?: string;
+   transactionHash?: string;
+   message?: string;
+   error?: string;
+ } | null>(null);
 
  const decision = evaluateAction({
    type: "TRANSFER",
    amount,
-   asset: "USDC",
+   asset: "OKB",
    recipient,
-   network: "Base",
+   network: "X Layer",
  });
 
  useEffect(() => {
@@ -26,9 +33,9 @@ export default function Home() {
      {
        type: "TRANSFER",
        amount,
-       asset: "USDC",
+       asset: "OKB",
        recipient,
-       network: "Base",
+       network: "X Layer",
      },
      decision,
    );
@@ -49,6 +56,50 @@ export default function Home() {
  setTheme(next);
  document.documentElement.dataset.theme = next;
  }, []);
+
+ const handleExecute = async () => {
+   if (decision.decision !== "APPROVE") return;
+
+   setExecuting(true);
+   setExecutionResult(null);
+
+   try {
+     const response = await fetch("/api/execute", {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({
+         agent: "Treasury Agent",
+         action: {
+           type: "TRANSFER",
+           amount,
+           asset: "OKB",
+           recipient,
+           network: "X Layer",
+         },
+       }),
+     });
+
+     const data = await response.json();
+
+     if (!response.ok) {
+       setExecutionResult({
+         error: data.error ?? "Execution request failed.",
+       });
+       return;
+     }
+
+     setExecutionResult(data);
+   } catch (error) {
+     setExecutionResult({
+       error:
+         error instanceof Error
+           ? error.message
+           : "Execution request failed.",
+     });
+   } finally {
+     setExecuting(false);
+   }
+ };
 
  const toggleTheme = () => {
  const next = theme === "dark" ? "light" : "dark";
@@ -145,7 +196,7 @@ export default function Home() {
                 </p>
 
                 <h2 className="mt-4 text-2xl font-semibold tracking-tight">
-                  Transfer USDC
+                  Transfer OKB
                 </h2>
 
                 <div className="mt-8 space-y-5">
@@ -159,7 +210,7 @@ export default function Home() {
                         onChange={(event) => setAmount(Number(event.target.value))}
                         className="w-full bg-transparent py-3 text-sm outline-none"
                       />
-                      <span className="text-sm text-[var(--muted)]">USDC</span>
+                      <span className="text-sm text-[var(--muted)]">OKB</span>
                     </div>
                   </label>
 
@@ -170,7 +221,9 @@ export default function Home() {
                       onChange={(event) => setRecipient(event.target.value)}
                       className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none"
                     >
-                      <option value="0x7A3...91F2">0x7A3...91F2 — Allowed</option>
+                      <option value="0xD6aa751524A94161eAdfF44047266Fa8586F7A77">
+                        0xD6aa...7A77 — X Layer executor
+                      </option>
                       <option value="0xUNKNOWN">0xUNKNOWN — Unknown</option>
                     </select>
                   </label>
@@ -181,8 +234,8 @@ export default function Home() {
                         Recipient policy
                       </p>
                       <p className="mt-1 text-sm font-medium">
-                        {recipient === "0x7A3...91F2"
-                          ? "Allowlisted recipient"
+                        {recipient === "0xD6aa751524A94161eAdfF44047266Fa8586F7A77"
+                          ? "X Layer executor allowlisted"
                           : "Unknown recipient"}
                       </p>
                     </div>
@@ -194,7 +247,7 @@ export default function Home() {
                           : "text-red-500"
                       }`}
                     >
-                      {recipient === "0x7A3...91F2"
+                      {recipient === "0xD6aa751524A94161eAdfF44047266Fa8586F7A77"
                         ? "✓ Allowed"
                         : "× Blocked"}
                     </span>
@@ -203,7 +256,7 @@ export default function Home() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
                       <p className="text-xs text-[var(--muted)]">Network</p>
-                      <p className="mt-1 text-sm font-medium">Base</p>
+                      <p className="mt-1 text-sm font-medium">X Layer</p>
                     </div>
                     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
                       <p className="text-xs text-[var(--muted)]">Agent</p>
@@ -276,15 +329,51 @@ export default function Home() {
                 </div>
 
                 <button
-                  disabled={decision.decision === "BLOCK"}
+                  onClick={handleExecute}
+                  disabled={decision.decision !== "APPROVE" || executing}
                   className="mt-6 w-full rounded-xl bg-[var(--foreground)] py-3 text-sm font-semibold text-[var(--background)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  {decision.decision === "APPROVE"
-                    ? "Execute action"
-                    : decision.decision === "REVIEW"
-                      ? "Review execution"
-                      : "Execution blocked"}
+                  {executing
+                    ? "Executing on X Layer..."
+                    : decision.decision === "APPROVE"
+                      ? "Execute action"
+                      : decision.decision === "REVIEW"
+                        ? "Review execution"
+                        : "Execution blocked"}
                 </button>
+
+                {executionResult && (
+                  <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
+                      X Layer execution
+                    </p>
+
+                    <p
+                      className={`mt-2 text-sm font-semibold ${
+                        executionResult.error
+                          ? "text-red-500"
+                          : executionResult.execution === "BROADCASTED"
+                            ? "text-emerald-500"
+                            : "text-[var(--foreground)]"
+                      }`}
+                    >
+                      {executionResult.error ??
+                        executionResult.execution ??
+                        executionResult.message}
+                    </p>
+
+                    {executionResult.transactionHash && (
+                      <div className="mt-3">
+                        <p className="text-xs text-[var(--muted)]">
+                          Transaction hash
+                        </p>
+                        <p className="mt-1 break-all font-mono text-xs">
+                          {executionResult.transactionHash}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

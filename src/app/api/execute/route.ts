@@ -29,8 +29,43 @@ export async function POST(request: Request) {
 
     const { account, walletClient, publicClient } = getXLayerExecutor();
 
-    // First live execution is deliberately a tiny native OKB transfer.
-    const amount = parseEther("0.000001");
+    // Native OKB execution is the currently supported X Layer execution path.
+    // Reject other assets instead of pretending they were executed.
+    if (action.asset !== "OKB" || action.network !== "X Layer") {
+      return NextResponse.json(
+        {
+          error:
+            "X Layer native execution currently supports OKB transfers only.",
+          supportedAsset: "OKB",
+          supportedNetwork: "X Layer",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (action.recipient !== account.address) {
+      return NextResponse.json(
+        {
+          error:
+            "The X Layer test executor only permits transfers to its allowlisted test recipient.",
+          executor: account.address,
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      typeof action.amount !== "number" ||
+      !Number.isFinite(action.amount) ||
+      action.amount <= 0
+    ) {
+      return NextResponse.json(
+        { error: "Transfer amount must be a positive number." },
+        { status: 400 },
+      );
+    }
+
+    const amount = parseEther(String(action.amount));
 
     const balance = await publicClient.getBalance({
       address: account.address,
@@ -63,9 +98,9 @@ export async function POST(request: Request) {
       broadcasted: true,
       transactionHash: hash,
       recipient: TESTNET_EXECUTION_RECIPIENT,
-      value: "0.000001 OKB",
+      value: `${action.amount} OKB`,
       message:
-        "ClearX approved the action and broadcast the testnet transaction on X Layer.",
+        "ClearX approved the action and broadcast the approved OKB transfer on X Layer Testnet.",
     });
   } catch (error) {
     console.error("ClearX execution error:", error);
