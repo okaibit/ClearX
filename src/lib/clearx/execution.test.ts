@@ -4,7 +4,7 @@ const baseAction = {
   type: "TRANSFER" as const,
   asset: "USDC",
   recipient: "0x7A3...91F2",
-  network: "Base",
+  network: "X Layer",
 };
 
 const approved = executeThroughClearX("Treasury Agent", {
