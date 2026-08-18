@@ -18,6 +18,9 @@ type ExecutionResult = {
   recipient?: string;
   value?: string;
   verifiedOnchain?: boolean;
+ failureDemo?: boolean;
+  failureMode?: boolean;
+ settlementStatus?: "CLEARED" | "HELD";
   blockNumber?: string;
   settlement?: {
     protocol?: string;
@@ -67,7 +70,7 @@ function short(value?: string, start = 8, end = 6) {
 
 export default function Home() {
   const [theme, setTheme] = useState<Theme>("dark");
-  const [amount, setAmount] = useState(1);
+  const [amount, setAmount] = useState(0.01);
   const [recipient, setRecipient] = useState(EXECUTOR);
   const [executing, setExecuting] = useState(false);
   const [executionResult, setExecutionResult] =
@@ -149,9 +152,14 @@ export default function Home() {
 
   const verified =
     executionResult?.execution === "VERIFIED_ONCHAIN" &&
-    executionResult.verifiedOnchain &&
-    executionResult.evidence?.verified &&
-    executionResult.settlement?.completed;
+    executionResult.verifiedOnchain === true &&
+    executionResult.evidence?.verified === true &&
+    executionResult.settlement?.completed === true;
+
+  const settlementHeld =
+    executionResult?.settlementStatus === "HELD" ||
+    (executionResult?.evidence?.verified === false &&
+      (executionResult?.failureDemo === true || executionResult?.failureMode === true));
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -379,27 +387,39 @@ export default function Home() {
                     className={`mt-3 text-3xl font-semibold tracking-tight ${
                       verified
                         ? "text-emerald-500"
-                        : executionResult.error
-                          ? "text-red-500"
-                          : ""
+                        : settlementHeld
+                          ? "text-amber-500"
+                          : executionResult.error
+                            ? "text-red-500"
+                            : ""
                     }`}
                   >
                     {verified
                       ? "VERIFIED ONCHAIN"
-                      : executionResult.error
-                        ? "Execution failed"
-                        : "Settlement processing"}
+                      : settlementHeld
+                        ? "SETTLEMENT HELD"
+                        : executionResult.error
+                          ? "Execution failed"
+                          : "Settlement processing"}
                   </h2>
 
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-                    {executionResult.message ??
-                      executionResult.error}
+                    {settlementHeld
+                      ? "ClearX detected an evidence mismatch. Settlement was held and no evaluator approval was broadcast."
+                      : executionResult.message ??
+                        executionResult.error}
                   </p>
                 </div>
 
                 {verified && (
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-3xl text-emerald-500">
                     ✓
+                  </div>
+                )}
+
+                {settlementHeld && (
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 text-3xl text-amber-500">
+                    !
                   </div>
                 )}
               </div>
@@ -409,10 +429,10 @@ export default function Home() {
               <div className="p-7 lg:p-10">
                 <div className="grid gap-3 md:grid-cols-4">
                   {[
-                    ["01", "Policy", "Satisfied"],
+                    ["01", "Policy", executionResult.decision === "APPROVE" ? "Satisfied" : "Blocked"],
                     ["02", "Job", executionResult.settlement?.jobId ? `#${executionResult.settlement.jobId}` : "Created"],
-                    ["03", "Evidence", executionResult.evidence?.verified ? "Verified" : "Pending"],
-                    ["04", "Settlement", executionResult.settlement?.completed ? "Completed" : "Pending"],
+                    ["03", "Evidence", executionResult.evidence?.verified ? "Verified" : settlementHeld ? "Failed" : "Pending"],
+                    ["04", "Settlement", executionResult.settlement?.completed ? "Completed" : settlementHeld ? "Held" : "Pending"],
                   ].map(([number, title, value]) => (
                     <div
                       key={number}
@@ -479,10 +499,18 @@ export default function Home() {
                         <p className="text-xs text-[var(--muted)]">
                           Settlement
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-emerald-500">
+                        <p className={`mt-1 text-sm font-semibold ${
+                          executionResult.settlement?.completed
+                            ? "text-emerald-500"
+                            : settlementHeld
+                              ? "text-amber-500"
+                              : "text-[var(--muted)]"
+                        }`}>
                           {executionResult.settlement?.completed
                             ? "Completed"
-                            : "Pending"}
+                            : settlementHeld
+                              ? "HELD — Not cleared"
+                              : "Pending"}
                         </p>
                       </div>
 
@@ -498,6 +526,7 @@ export default function Home() {
                   </div>
                 </div>
 
+                {!settlementHeld && executionResult.transactionHash && (
                 <div className="mt-10 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5">
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -538,6 +567,22 @@ export default function Home() {
                   </div>
                 </div>
 
+                )}
+
+                {settlementHeld && (
+                  <div className="mt-10 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+                    <p className="text-xs uppercase tracking-[0.16em] text-amber-500">
+                      Settlement protection
+                    </p>
+                    <p className="mt-2 text-sm font-semibold">
+                      Payment held
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                      Independent blockchain evidence did not satisfy the obligation. No evaluator approval or settlement transaction was broadcast.
+                    </p>
+                  </div>
+                )}
+
                 {executionResult.transactions &&
                   executionResult.transactions.length > 0 && (
                     <div className="mt-10">
@@ -568,7 +613,11 @@ export default function Home() {
                                           ? "Fund job"
                                           : tx.step === "submit"
                                             ? "Submit deliverable"
-                                            : "ClearX evaluator approval"}
+                                            : tx.step === "agent.transfer"
+                                              ? "Agent obligation"
+                                              : tx.step === "evaluator.approve"
+                                                ? "ClearX evaluator approval"
+                                                : tx.step}
                                 </p>
                                 <p className="mt-1 break-all font-mono text-[11px] text-[var(--muted)]">
                                   {tx.hash}

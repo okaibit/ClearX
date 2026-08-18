@@ -185,3 +185,89 @@ export async function verifyTransferEvidence({
     },
   };
 }
+
+
+export async function verifyNativeTransferEvidence({
+  rpcUrl,
+  transactionHash,
+  expectedRecipient,
+  expectedAmount,
+}: {
+  rpcUrl: string;
+  transactionHash: Hex;
+  expectedRecipient: Address;
+  expectedAmount: bigint;
+}): Promise<EvidenceVerification> {
+  const client = createPublicClient({
+    transport: http(rpcUrl),
+  });
+
+  const receipt = await client.getTransactionReceipt({
+    hash: transactionHash,
+  });
+
+  const transaction = await client.getTransaction({
+    hash: transactionHash,
+  });
+
+  if (receipt.status !== "success") {
+    return {
+      verified: false,
+      checks: [
+        {
+          name: "Transaction status",
+          status: "FAILED",
+          expected: "success",
+          observed: receipt.status,
+        },
+      ],
+      reason: "The agent obligation transaction failed.",
+    };
+  }
+
+  const recipientPassed =
+    transaction.to?.toLowerCase() ===
+    expectedRecipient.toLowerCase();
+
+  const amountPassed =
+    transaction.value === expectedAmount;
+
+  const checks: EvidenceCheck[] = [
+    {
+      name: "Transaction status",
+      status: "PASSED",
+      expected: "success",
+      observed: receipt.status,
+    },
+    {
+      name: "Recipient",
+      status: recipientPassed ? "PASSED" : "FAILED",
+      expected: expectedRecipient,
+      observed: transaction.to ?? "unknown",
+    },
+    {
+      name: "Amount",
+      status: amountPassed ? "PASSED" : "FAILED",
+      expected: expectedAmount.toString(),
+      observed: transaction.value.toString(),
+    },
+  ];
+
+  const verified = recipientPassed && amountPassed;
+
+  return {
+    verified,
+    checks,
+    reason: verified
+      ? "Blockchain evidence satisfies the agent execution obligation."
+      : "Blockchain evidence does not satisfy the agent execution obligation.",
+    evidence: {
+      transactionHash,
+      blockNumber: receipt.blockNumber,
+      token: "OKB" as Address,
+      from: transaction.from,
+      to: transaction.to ?? expectedRecipient,
+      amount: transaction.value,
+    },
+  };
+}

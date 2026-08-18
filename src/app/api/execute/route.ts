@@ -4,11 +4,15 @@ import {
   createWalletClient,
   http,
   parseUnits,
+  parseEther,
   zeroAddress,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { executeThroughClearX } from "@/lib/clearx/execution";
-import { verifyTransferEvidence } from "@/lib/clearx/evidence";
+import {
+  verifyTransferEvidence,
+  verifyNativeTransferEvidence,
+} from "@/lib/clearx/evidence";
 import { xLayerTestnet } from "@/lib/clearx/xlayer";
 
 import deployment from "../../../../deployments/xlayer-testnet.json";
@@ -86,6 +90,7 @@ export async function POST(request: Request) {
 
     const agent = body?.agent;
     const action = body?.action;
+    const failureDemo = body?.failureDemo === true;
 
     if (typeof agent !== "string" || !action) {
       return NextResponse.json(
@@ -270,10 +275,187 @@ export async function POST(request: Request) {
       blockNumber: submit.blockNumber.toString(),
     });
 
-    // 6. ClearX evaluator approves evidence and releases payment
+    // 6. Execute the agent's actual OKB obligation on X Layer.
+    //
+    // ClearX verifies this blockchain action BEFORE allowing settlement.
+    // Evidence commitment used by the evaluator/settlement record.
     const evidenceHash =
       "0x2222222222222222222222222222222222222222222222222222222222222222";
 
+    // 6. Execute the agent obligation on X Layer.
+    //
+    // Failure demo: do not broadcast an intentionally bad transaction.
+    // Instead, deliberately construct a failed evidence result and hold
+    // settlement. This demonstrates the safety control without risking funds.
+    if (failureDemo) {
+      const expectedRecipient =
+        action.recipient as `0x${string}`;
+      const observedRecipient = zeroAddress;
+      const expectedAmount = parseEther(
+        action.amount.toString(),
+      );
+
+      const checks = [
+        {
+          name: "Transaction status",
+          status: "PASSED" as const,
+          expected: "success",
+          observed: "success",
+        },
+        {
+          name: "Recipient",
+          status: "FAILED" as const,
+          expected: expectedRecipient,
+          observed: observedRecipient,
+        },
+        {
+          name: "Amount",
+          status: "PASSED" as const,
+          expected: expectedAmount.toString(),
+          observed: expectedAmount.toString(),
+        },
+      ];
+
+      return NextResponse.json({
+        ...result,
+        execution: "VERIFIED_ONCHAIN",
+        executor: account.address,
+        network: "X Layer Testnet",
+        chainId: 1952,
+        broadcasted: false,
+        verifiedOnchain: false,
+        failureDemo: true,
+        settlementStatus: "HELD",
+        settlement: {
+          protocol: "ERC-8183-style AgenticCommerce",
+          jobId: jobId.toString(),
+          budget: settlementAmount.toString(),
+          paymentToken: USDC,
+          evaluator: EVALUATOR,
+          provider: account.address,
+          completed: false,
+          evidenceHash,
+        },
+        evidence: {
+          verified: false,
+          reason:
+            "Failure demo: independently observed recipient does not satisfy the execution obligation. Settlement was held and no evaluator approval was broadcast.",
+          checks,
+        },
+        transactions,
+        message:
+          "ClearX detected an evidence mismatch and held settlement. No intentionally bad blockchain transaction was sent.",
+      });
+    }
+
+    const agentTransfer =
+      await walletClient.sendTransaction({
+        to: action.recipient as `0x${string}`,
+        value: parseEther(action.amount.toString()),
+      });
+
+    const agentTransferReceipt =
+      await publicClient.waitForTransactionReceipt({
+        hash: agentTransfer,
+      });
+
+    if (agentTransferReceipt.status !== "success") {
+      throw new Error("Agent obligation transaction failed.");
+    }
+
+    transactions.push({
+      step: "agent.transfer",
+      hash: agentTransfer,
+      blockNumber: agentTransferReceipt.blockNumber.toString(),
+    });
+
+    // 7. Independently verify the actual agent execution.
+    //
+    const expectedEvidenceRecipient =
+      action.recipient as `0x${string}`;
+
+    const evidence = await verifyNativeTransferEvidence({
+      rpcUrl,
+      transactionHash: agentTransfer,
+      expectedRecipient: expectedEvidenceRecipient,
+      expectedAmount: parseEther(action.amount.toString()),
+    });
+
+    // CRITICAL CONTROL POINT:
+    //
+    // Settlement cannot clear unless the independently observed
+    // blockchain evidence satisfies the obligation.
+    if (!evidence.verified) {
+      const job = (await publicClient.readContract({
+        address: COMMERCE,
+        abi: commerce.abi,
+        functionName: "jobs",
+        args: [jobId],
+      })) as readonly [
+        bigint,
+        `0x${string}`,
+        `0x${string}`,
+        `0x${string}`,
+        string,
+        bigint,
+        bigint,
+        number,
+        `0x${string}`,
+      ];
+
+      const finalStatus = job[7];
+      const finalBudget = job[5];
+
+      return NextResponse.json({
+        ...result,
+        execution: "VERIFIED_ONCHAIN",
+        executor: account.address,
+        network: "X Layer Testnet",
+        chainId: 1952,
+        broadcasted: true,
+        verifiedOnchain: false,
+        transactionHash: agentTransfer,
+        blockNumber: agentTransferReceipt.blockNumber.toString(),
+        recipient: action.recipient,
+        value: `${action.amount} OKB`,
+        settlement: {
+          protocol: "ERC-8183-style AgenticCommerce",
+          jobId: jobId.toString(),
+          budget: settlementAmount.toString(),
+          verifiedBudget: finalBudget.toString(),
+          paymentToken: USDC,
+          evaluator: EVALUATOR,
+          provider: account.address,
+          finalStatus,
+          completed: false,
+          evidenceHash: undefined,
+        },
+        evidence: {
+          verified: false,
+          reason:
+            "Settlement held: independently verified blockchain evidence does not satisfy the obligation.",
+          checks: evidence.checks,
+          blockchain: evidence.evidence
+            ? {
+                transactionHash: evidence.evidence.transactionHash,
+                blockNumber: evidence.evidence.blockNumber.toString(),
+                token: "OKB",
+                from: evidence.evidence.from,
+                to: evidence.evidence.to,
+                amount: evidence.evidence.amount.toString(),
+              }
+            : undefined,
+        },
+        failureMode: true,
+        settlementStatus: "HELD",
+        message:
+          "ClearX detected an evidence mismatch and refused to clear settlement.",
+        transactions,
+      });
+    }
+
+    // 8. Evidence passed. ONLY NOW can ClearX approve the
+    // ERC-8183-style commerce job and release settlement.
     const evaluation = await sendContract(
       "ClearX evaluator approving evidence",
       {
@@ -290,7 +472,7 @@ export async function POST(request: Request) {
       blockNumber: evaluation.blockNumber.toString(),
     });
 
-    // 7. Read final on-chain job state.
+    // 9. Read final on-chain job state AFTER settlement approval.
     const job = (await publicClient.readContract({
       address: COMMERCE,
       abi: commerce.abi,
@@ -311,9 +493,8 @@ export async function POST(request: Request) {
     const finalStatus = job[7];
     const finalBudget = job[5];
 
-    // 8. Independently verify the actual settlement transaction.
-    // The evaluator transaction releases the escrowed TestUSDC to the provider.
-    const evidence = await verifyTransferEvidence({
+    // 10. Independently verify the settlement transfer itself.
+    const settlementEvidence = await verifyTransferEvidence({
       rpcUrl,
       transactionHash: evaluation.hash,
       tokenAddress: USDC,
@@ -324,7 +505,8 @@ export async function POST(request: Request) {
     const verified =
       finalStatus === 3 &&
       finalBudget === settlementAmount &&
-      evidence.verified;
+      evidence.verified &&
+      settlementEvidence.verified;
 
     return NextResponse.json({
       ...result,
@@ -336,6 +518,10 @@ export async function POST(request: Request) {
       chainId: 1952,
       broadcasted: true,
       verifiedOnchain: verified,
+      failureDemo,
+      settlementStatus: verified
+        ? "CLEARED"
+        : "HELD",
       transactionHash: evaluation.hash,
       blockNumber: evaluation.blockNumber.toString(),
       recipient: action.recipient,
@@ -353,17 +539,17 @@ export async function POST(request: Request) {
         evidenceHash,
       },
       evidence: {
-        verified: evidence.verified,
-        reason: evidence.reason,
+        verified: verified,
+        reason: settlementEvidence.reason,
         checks: evidence.checks,
-        blockchain: evidence.evidence
+        blockchain: settlementEvidence.evidence
           ? {
-              transactionHash: evidence.evidence.transactionHash,
-              blockNumber: evidence.evidence.blockNumber.toString(),
-              token: evidence.evidence.token,
-              from: evidence.evidence.from,
-              to: evidence.evidence.to,
-              amount: evidence.evidence.amount.toString(),
+              transactionHash: settlementEvidence.evidence.transactionHash,
+              blockNumber: settlementEvidence.evidence.blockNumber.toString(),
+              token: settlementEvidence.evidence.token,
+              from: settlementEvidence.evidence.from,
+              to: settlementEvidence.evidence.to,
+              amount: settlementEvidence.evidence.amount.toString(),
             }
           : undefined,
       },
