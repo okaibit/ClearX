@@ -42,6 +42,16 @@ node scripts/compile-contracts.mjs
 node scripts/deploy-xlayer.mjs
 ```
 
+## Roadmap
+
+What's live today verifies one thing precisely: that a specific token amount reached a specific recipient, attested by two independent signers before settlement clears. The bigger direction this points toward:
+
+- **Beyond payments.** The obligation, evidence, and certificate structures generalize to any agent deliverable, not just token transfers, an API response, a computed result, a piece of retrieved data could be verified the same way before an agent is paid for it.
+- **Portable reputation.** Each certificate today proves one job happened correctly. Chained together, an agent's certificates become a queryable trust record other agents or protocols can check before contracting with it, turning ClearX from a transaction-time check into standing infrastructure.
+- **Open verifier set.** The evaluator and certificate signers are two fixed wallets today. The natural extension is a staked, permissionless verifier market, anyone can attest to evidence, with slashing for false attestations, removing the need to trust a fixed set of keys at all.
+
+None of the above is built yet. They're the direction the current architecture was built to support.
+
 ## Built for
 
 OKX BuildX AI Season / KeeperHub Agents Onchain Hackathon.
