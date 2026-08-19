@@ -43,4 +43,4 @@ node scripts/deploy-xlayer.mjs
 
 ## Built for
 
-OKX BuildX AI Season / KeeperHub Agents Onchain Hackathon.
+OKX BuildX AI Season
