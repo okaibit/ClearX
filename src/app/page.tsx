@@ -6,6 +6,13 @@ import { createAuditEvent } from "@/lib/clearx/audit";
 
 type Theme = "light" | "dark";
 
+type AIAnalysis = {
+  risk: "LOW" | "MEDIUM" | "HIGH";
+  recommendation: "APPROVE" | "REVIEW" | "BLOCK";
+  summary: string;
+  signals: string[];
+};
+
 type ExecutionResult = {
   execution?: string;
   decision?: string;
@@ -73,8 +80,14 @@ export default function Home() {
   const [amount, setAmount] = useState(0.01);
   const [recipient, setRecipient] = useState(EXECUTOR);
   const [executing, setExecuting] = useState(false);
+  const [failureDemo, setFailureDemo] = useState(false);
+  const [executionProgress, setExecutionProgress] = useState(0);
   const [executionResult, setExecutionResult] =
     useState<ExecutionResult | null>(null);
+  const [aiAnalysis, setAiAnalysis] =
+    useState<AIAnalysis | null>(null);
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [auditEvent, setAuditEvent] = useState<
     ReturnType<typeof createAuditEvent> | null
   >(null);
@@ -115,11 +128,53 @@ export default function Home() {
     document.documentElement.dataset.theme = next;
   };
 
+  const runAIAnalysis = async () => {
+    setAiAnalyzing(true);
+    setAiError(null);
+
+    try {
+      const response = await fetch("/api/ai-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent: "ClearX Demo Agent",
+          action,
+          policy: decision,
+          failureDemo,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "AI analysis failed.");
+      }
+
+      setAiAnalysis(data.analysis);
+    } catch (error) {
+      setAiAnalysis(null);
+      setAiError(
+        error instanceof Error
+          ? error.message
+          : "AI analysis failed.",
+      );
+    } finally {
+      setAiAnalyzing(false);
+    }
+  };
+
   const handleExecute = async () => {
     if (decision.decision !== "APPROVE") return;
 
     setExecuting(true);
     setExecutionResult(null);
+    setExecutionProgress(0);
+
+    const progressTimer = window.setInterval(() => {
+      setExecutionProgress((current) =>
+        current < 3 ? current + 1 : current,
+      );
+    }, 2500);
 
     try {
       const response = await fetch("/api/execute", {
@@ -128,6 +183,7 @@ export default function Home() {
         body: JSON.stringify({
           agent: "ClearX Demo Agent",
           action,
+          failureDemo,
         }),
       });
 
@@ -146,6 +202,8 @@ export default function Home() {
             : "Execution request failed.",
       });
     } finally {
+      window.clearInterval(progressTimer);
+      setExecutionProgress(3);
       setExecuting(false);
     }
   };
@@ -348,6 +406,96 @@ export default function Home() {
                 ))}
               </div>
 
+              <div className="mt-6 flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">Failure Demo</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {failureDemo
+                      ? "Simulate an evidence mismatch and hold settlement."
+                      : "Run the normal execution and settlement flow."}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setFailureDemo((value) => !value)}
+                  aria-pressed={failureDemo}
+                  className={`relative h-6 w-11 rounded-full transition ${
+                    failureDemo
+                      ? "bg-red-500"
+                      : "bg-[var(--muted)]"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${
+                      failureDemo ? "left-6" : "left-1"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--background)] p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  
+
+                  <button
+                    type="button"
+                    onClick={runAIAnalysis}
+                    disabled={aiAnalyzing}
+                    className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-xs font-semibold transition hover:bg-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {aiAnalyzing ? "Analyzing..." : "Run AI analysis"}
+                  </button>
+                </div>
+
+              </div>
+
+              {executing && (
+                <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-medium">
+                      Processing on X Layer Testnet
+                    </p>
+                    <span className="text-xs text-[var(--muted)]">
+                      Please wait
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    {[
+                      "Preparing commerce job",
+                      "Processing X Layer transactions",
+                      "Verifying blockchain evidence",
+                      "Finalizing settlement",
+                    ].map((step, index) => (
+                      <div
+                        key={step}
+                        className="flex items-center gap-2"
+                      >
+                        <span
+                          className={
+                            index <= executionProgress
+                              ? "text-emerald-500"
+                              : "text-[var(--muted)]"
+                          }
+                        >
+                          {index <= executionProgress ? "✓" : "○"}
+                        </span>
+                        <span
+                          className={
+                            index <= executionProgress
+                              ? "text-[var(--foreground)]"
+                              : "text-[var(--muted)]"
+                          }
+                        >
+                          {step}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={handleExecute}
                 disabled={decision.decision !== "APPROVE" || executing}
@@ -355,8 +503,106 @@ export default function Home() {
               >
                 {executing
                   ? "Clearing obligation on X Layer..."
-                  : "Execute & clear obligation"}
+                  : failureDemo ? "Simulate evidence failure" : "Execute & clear obligation"}
               </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="groq-analysis"
+        className="mx-auto max-w-7xl px-6 pb-24 lg:px-8"
+      >
+        <div className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] shadow-2xl shadow-black/10">
+          <div className="border-b border-[var(--border)] px-6 py-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+              Groq AI analysis
+            </p>
+            <h2 className="mt-1 text-lg font-semibold">
+              Advisory assessment
+            </h2>
+          </div>
+
+          <div className="p-7 lg:p-10">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5">
+              {aiAnalyzing ? (
+                <div className="text-sm text-[var(--muted)]">
+                  Analyzing obligation...
+                </div>
+              ) : aiError ? (
+                <div className="text-sm text-red-500">
+                  AI analysis unavailable: {aiError}
+                </div>
+              ) : aiAnalysis ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-[var(--border)] p-4">
+                      <p className="text-xs text-[var(--muted)]">Risk</p>
+                      <p
+                        className={`mt-1 text-sm font-semibold ${
+                          aiAnalysis.risk === "LOW"
+                            ? "text-emerald-500"
+                            : aiAnalysis.risk === "MEDIUM"
+                              ? "text-amber-500"
+                              : "text-red-500"
+                        }`}
+                      >
+                        {aiAnalysis.risk}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-[var(--border)] p-4">
+                      <p className="text-xs text-[var(--muted)]">
+                        Recommendation
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {aiAnalysis.recommendation}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-[var(--border)] p-4">
+                    <p className="text-xs text-[var(--muted)]">
+                      Assessment
+                    </p>
+                    <p className="mt-2 text-sm leading-6">
+                      {aiAnalysis.summary}
+                    </p>
+                  </div>
+
+                  {aiAnalysis.signals.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs text-[var(--muted)]">
+                        AI signals
+                      </p>
+
+                      <div className="mt-2 space-y-2">
+                        {aiAnalysis.signals.map((signal, index) => (
+                          <div
+                            key={`${signal}-${index}`}
+                            className="flex items-start gap-2 text-xs text-[var(--muted)]"
+                          >
+                            <span className="mt-0.5 text-emerald-500">
+                              ✓
+                            </span>
+                            <span>{signal}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="mt-4 text-[10px] leading-4 text-[var(--muted)]">
+                    AI provides advisory risk analysis before execution. Deterministic
+                    policy and independent blockchain evidence control settlement.
+                  </p>
+                </>
+              ) : (
+                <div className="text-sm text-[var(--muted)]">
+                  Run AI analysis to generate an advisory assessment.
+                </div>
+              )}
             </div>
           </div>
         </div>
