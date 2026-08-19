@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ClearX
 
-## Getting Started
+An AI-assisted verification layer for agent-to-agent commerce, built on X Layer.
 
-First, run the development server:
+## The problem
+
+Autonomous agents can now negotiate and pay each other, but there's no reliable way to confirm a job was actually done before the money moves. ClearX closes that gap: it compiles a plain-language instruction into a structured obligation, checks the proposed action against a policy engine, and verifies real on-chain evidence before authorizing settlement.
+
+## How it works
+
+1. **Obligation compiler** (`src/lib/clearx/obligation.ts`) parses a raw instruction (amount, recipient, deadline, network, settlement terms) into a structured `ClearXObligation`.
+2. **Policy engine** (`src/lib/clearx/policy.ts`) evaluates the proposed action against execution scope, network, recipient allowlist, and amount limits, returning `APPROVE`, `REVIEW`, or `BLOCK`.
+3. **Evidence verifier** (`src/lib/clearx/evidence.ts`) reads the actual transaction receipt and decoded ERC-20 `Transfer` event from the chain and checks it against the obligation, no self-reported claims.
+4. **On-chain settlement**: `AgenticCommerce.sol` escrows funds per job (Open → Funded → Submitted → Completed/Rejected/Expired) and `ClearXEvaluator.sol` releases or refunds payment once evidence is verified.
+
+## Contracts (X Layer Testnet, chain ID 1952)
+
+| Contract | Address |
+|---|---|
+| TestUSDC | `0x771fe2efa6208a738cafb7a06c0d272d8eae6d70` |
+| AgenticCommerce | `0x3b92251ab1caa54c755595c77126319fe02a5dc5` |
+| ClearXEvaluator | `0xd75d6cdf537e1ea30d2c7b03a1b1eafebc7d2ac9` |
+
+## Stack
+
+Next.js 16, viem, OpenZeppelin contracts (ReentrancyGuard, SafeERC20), Groq for AI-assisted analysis.
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To compile and deploy contracts to X Layer testnet:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+node scripts/compile-contracts.mjs
+node scripts/deploy-xlayer.mjs
+```
 
-## Learn More
+## Built for
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+OKX BuildX AI Season / KeeperHub Agents Onchain Hackathon.

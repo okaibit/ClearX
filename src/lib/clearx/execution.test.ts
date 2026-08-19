@@ -3,7 +3,7 @@ import { executeThroughClearX } from "./execution";
 const baseAction = {
   type: "TRANSFER" as const,
   asset: "USDC",
-  recipient: "0x7A3...91F2",
+  recipient: "0xD6aa751524A94161eAdfF44047266Fa8586F7A77",
   network: "X Layer",
 };
 
