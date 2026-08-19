@@ -6,6 +6,8 @@ import {
   parseUnits,
   parseEther,
   zeroAddress,
+  encodeAbiParameters,
+  keccak256,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { executeThroughClearX } from "@/lib/clearx/execution";
@@ -19,6 +21,7 @@ import deployment from "../../../../deployments/xlayer-testnet.json";
 import testUSDC from "../../../../artifacts/TestUSDC.json";
 import commerce from "../../../../artifacts/AgenticCommerce.json";
 import evaluator from "../../../../artifacts/ClearXEvaluator.json";
+import evidenceCertificate from "../../../../artifacts/ClearXEvidenceCertificate.json";
 
 function getPrivateKey() {
   const value = process.env.CLEARX_EXECUTOR_PRIVATE_KEY;
@@ -85,6 +88,9 @@ const COMMERCE =
   deployment.contracts.AgenticCommerce.address as `0x${string}`;
 const EVALUATOR =
   deployment.contracts.ClearXEvaluator.address as `0x${string}`;
+
+const EVIDENCE_CERTIFICATE =
+  deployment.contracts.ClearXEvidenceCertificate.address as `0x${string}`;
 
 async function sendContract(
   label: string,
@@ -225,12 +231,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const jobCreatedLogs = await publicClient.getLogs({
-      address: COMMERCE,
-      event: jobCreatedEvent as any,
-      fromBlock: create.blockNumber,
-      toBlock: create.blockNumber,
-    });
+    // X Layer can briefly expose the transaction receipt before the
+    // block is available to eth_getLogs. Wait for the block to become
+    // queryable before extracting the JobCreated event.
+    let jobCreatedLogs: any[] = [];
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        await publicClient.getBlock({
+          blockNumber: create.blockNumber,
+        });
+
+        jobCreatedLogs = await publicClient.getLogs({
+          address: COMMERCE,
+          event: jobCreatedEvent as any,
+          fromBlock: create.blockNumber,
+          toBlock: create.blockNumber,
+        });
+
+        if (jobCreatedLogs.length > 0) {
+          break;
+        }
+      } catch {
+        // X Layer RPC may need a short propagation window.
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
 
     if (jobCreatedLogs.length === 0) {
       throw new Error(
@@ -327,9 +354,6 @@ export async function POST(request: Request) {
     //
     // ClearX verifies this blockchain action BEFORE allowing settlement.
     // Evidence commitment used by the evaluator/settlement record.
-    const evidenceHash =
-      "0x2222222222222222222222222222222222222222222222222222222222222222";
-
     // 6. Execute the agent obligation on X Layer.
     //
     // Failure demo: do not broadcast an intentionally bad transaction.
@@ -382,7 +406,8 @@ export async function POST(request: Request) {
           evaluator: EVALUATOR,
           provider: account.address,
           completed: false,
-          evidenceHash,
+          evidenceHash:
+            "0x0000000000000000000000000000000000000000000000000000000000000001",
         },
         evidence: {
           verified: false,
@@ -502,7 +527,198 @@ export async function POST(request: Request) {
       });
     }
 
-    // 8. Evidence passed. Two independent approvers must each cast
+    // 8. Evidence passed. Create a cryptographic certificate over
+    // the independently observed execution evidence.
+
+    if (!evidence.evidence) {
+      throw new Error(
+        "Evidence verification passed without observable blockchain evidence.",
+      );
+    }
+
+    const observedEvidence = evidence.evidence;
+
+    // Hash the independently observed blockchain facts. This commitment
+    // is later bound into the EIP-712 evidence certificate.
+    const evidenceHash = keccak256(
+      encodeAbiParameters(
+        [
+          { name: "transactionHash", type: "bytes32" },
+          { name: "blockNumber", type: "uint256" },
+          { name: "from", type: "address" },
+          { name: "to", type: "address" },
+          { name: "amount", type: "uint256" },
+        ],
+        [
+          observedEvidence.transactionHash,
+          observedEvidence.blockNumber,
+          observedEvidence.from,
+          observedEvidence.to,
+          observedEvidence.amount,
+        ],
+      ),
+    );
+
+    const certificateDomain = {
+      name: "ClearX Evidence Certificate",
+      version: "1",
+      chainId: 1952,
+      verifyingContract: EVIDENCE_CERTIFICATE,
+    } as const;
+
+    const certificateTypes = {
+      EvidenceCertificate: [
+        { name: "jobId", type: "uint256" },
+        { name: "chainId", type: "uint256" },
+        { name: "commerce", type: "address" },
+        { name: "transactionHash", type: "bytes32" },
+        { name: "recipient", type: "address" },
+        { name: "amount", type: "uint256" },
+        { name: "evidenceHash", type: "bytes32" },
+      ],
+    } as const;
+
+    const certificateMessage = {
+      jobId,
+      chainId: BigInt(1952),
+      commerce: COMMERCE,
+      transactionHash: observedEvidence.transactionHash,
+      recipient: observedEvidence.to,
+      amount: observedEvidence.amount,
+      evidenceHash,
+    };
+
+    console.log(
+      "[ClearX] Creating evidence certificate for transaction:",
+      observedEvidence.transactionHash,
+    );
+
+    // Both independent approvers attest to the exact same evidence.
+    const certificateSignature1 = await account.signTypedData({
+      domain: certificateDomain,
+      types: certificateTypes,
+      primaryType: "EvidenceCertificate",
+      message: certificateMessage,
+    });
+
+    const certificateSignature2 =
+      await approver2Account.signTypedData({
+        domain: certificateDomain,
+        types: certificateTypes,
+        primaryType: "EvidenceCertificate",
+        message: certificateMessage,
+      });
+
+    // The certificate contract requires signatures in strictly increasing
+    // recovered-address order.
+    const certificateSignatures = [
+      {
+        address: account.address,
+        signature: certificateSignature1,
+      },
+      {
+        address: approver2Account.address,
+        signature: certificateSignature2,
+      },
+    ]
+      .sort((a, b) =>
+        a.address.toLowerCase().localeCompare(
+          b.address.toLowerCase(),
+        ),
+      )
+      .map((item) => item.signature);
+
+    // Calculate the exact certificate ID that the contract will verify.
+    const certificateId = await publicClient.readContract({
+      address: EVIDENCE_CERTIFICATE,
+      abi: evidenceCertificate.abi,
+      functionName: "certificateDigest",
+      args: [
+        jobId,
+        BigInt(1952),
+        COMMERCE,
+        observedEvidence.transactionHash,
+        observedEvidence.to,
+        observedEvidence.amount,
+        evidenceHash,
+      ],
+    });
+
+    const alreadyVerified = await publicClient.readContract({
+      address: EVIDENCE_CERTIFICATE,
+      abi: evidenceCertificate.abi,
+      functionName: "certificateVerified",
+      args: [certificateId],
+    });
+
+    if (alreadyVerified) {
+      throw new Error(
+        "Evidence certificate has already been verified on-chain.",
+      );
+    }
+
+    // Permanently attest to the evidence on X Layer.
+    const certificateVerification = await sendContract(
+      "ClearX evidence certificate: 2-of-2 verification",
+      {
+        address: EVIDENCE_CERTIFICATE,
+        abi: evidenceCertificate.abi,
+        functionName: "verifyCertificate",
+        args: [
+          jobId,
+          BigInt(1952),
+          COMMERCE,
+          observedEvidence.transactionHash,
+          observedEvidence.to,
+          observedEvidence.amount,
+          evidenceHash,
+          certificateSignatures,
+        ],
+      },
+    );
+
+    transactions.push({
+      step: "evidence.certificate (2 of 2, verified on-chain)",
+      hash: certificateVerification.hash,
+      blockNumber:
+        certificateVerification.blockNumber.toString(),
+    });
+
+    // X Layer may briefly lag when reading contract state immediately
+    // after a successful transaction. Retry the certificate state read
+    // before treating the verification as failed.
+    let certificateVerified = false;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      certificateVerified = (await publicClient.readContract({
+        address: EVIDENCE_CERTIFICATE,
+        abi: evidenceCertificate.abi,
+        functionName: "certificateVerified",
+        args: [certificateId],
+      })) as boolean;
+
+      if (certificateVerified) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    if (!certificateVerified) {
+      throw new Error(
+        "Evidence certificate transaction succeeded but certificate state was not verified after RPC retry window.",
+      );
+    }
+
+    console.log(
+      "[ClearX] Evidence certificate verified on-chain:",
+      certificateVerification.hash,
+    );
+
+    // 9. Evidence certificate passed. Two independent evaluator
+    // approvers must now authorize settlement.
+
+    // 9. Evidence passed. Two independent approvers must each cast
     // a vote before the evaluator's threshold releases settlement.
     const approval1 = await sendContract(
       "ClearX evaluator: approver 1 voting",
@@ -536,6 +752,17 @@ export async function POST(request: Request) {
       blockNumber: evaluation.blockNumber.toString(),
     });
 
+    // 10. Independently verify the settlement transfer itself.
+    // This check happens only after evaluator approval because the
+    // settlement transaction does not exist before that point.
+    const settlementEvidence = await verifyTransferEvidence({
+      rpcUrl,
+      transactionHash: evaluation.hash,
+      tokenAddress: USDC,
+      expectedRecipient: account.address,
+      expectedAmount: settlementAmount,
+    });
+
     // 9. Read final on-chain job state AFTER settlement approval.
     const job = (await publicClient.readContract({
       address: COMMERCE,
@@ -557,19 +784,11 @@ export async function POST(request: Request) {
     const finalStatus = job[7];
     const finalBudget = job[5];
 
-    // 10. Independently verify the settlement transfer itself.
-    const settlementEvidence = await verifyTransferEvidence({
-      rpcUrl,
-      transactionHash: evaluation.hash,
-      tokenAddress: USDC,
-      expectedRecipient: account.address,
-      expectedAmount: settlementAmount,
-    });
-
     const verified =
       finalStatus === 3 &&
       finalBudget === settlementAmount &&
       evidence.verified &&
+      certificateVerified &&
       settlementEvidence.verified;
 
     return NextResponse.json({
@@ -601,9 +820,29 @@ export async function POST(request: Request) {
         finalStatus,
         completed: finalStatus === 3,
         evidenceHash,
+        certificateId,
+        certificateTransactionHash: certificateVerification.hash,
+        certificateVerified,
+        attestations: [
+          {
+            signer: account.address,
+            signature: certificateSignature1,
+          },
+          {
+            signer: approver2Account.address,
+            signature: certificateSignature2,
+          },
+        ].sort((a, b) =>
+          a.signer.toLowerCase().localeCompare(b.signer.toLowerCase()),
+        ),
       },
       evidence: {
         verified: verified,
+        certificate: {
+          verified: certificateVerified,
+          certificateId,
+          transactionHash: certificateVerification.hash,
+        },
         reason: settlementEvidence.reason,
         checks: evidence.checks,
         blockchain: settlementEvidence.evidence

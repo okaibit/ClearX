@@ -19,6 +19,15 @@
         "0xC067Fa683514881B4E5F468fE87920A441e88687"
       ],
       "threshold": 2
+    },
+    "ClearXEvidenceCertificate": {
+      "address": "0x2d142be8ca4b8a89d9fa8fbafffd12789648afc9",
+      "transactionHash": "0x39e01aa5c8dd7688eadf61eed3d70e964aa846e14cfaab9acd50bd88c6bd655d",
+      "approvers": [
+        "0xD6aa751524A94161eAdfF44047266Fa8586F7A77",
+        "0xC067Fa683514881B4E5F468fE87920A441e88687"
+      ],
+      "threshold": 2
     }
   },
   "deployedAt": "2026-08-19T13:48:07.237Z"
