@@ -296,8 +296,10 @@ export default function Home() {
           <p className="mx-auto mt-8 max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">
             ClearX turns an agent action into an enforceable obligation,
             independently verifies the resulting blockchain evidence, and
-            requires a 2-of-2 cryptographic attestation before clearing
-            settlement. No single key can approve a payout alone.
+            binds that evidence into a 2-of-2 signed cryptographic
+            certificate before a separate 2-of-2 evaluator vote can
+            release settlement. No single key can attest evidence or
+            approve a payout alone.
           </p>
         </div>
       </section>
@@ -321,7 +323,7 @@ export default function Home() {
               ["02", "Policy", "Executable conditions"],
               ["03", "ERC-8183", "Escrowed job"],
               ["04", "Evidence", "Blockchain proof"],
-              ["05", "Certificate", "2-of-2 attestation"],
+              ["05", "Certificate", "2-of-2 signed evidence"],
               ["06", "Settlement", "Payment cleared"],
             ].map(([number, title, body], index) => (
               <div

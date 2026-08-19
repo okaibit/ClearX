@@ -11,7 +11,8 @@ Autonomous agents can now negotiate and pay each other, but there's no reliable 
 1. **Obligation compiler** (`src/lib/clearx/obligation.ts`) parses a raw instruction (amount, recipient, deadline, network, settlement terms) into a structured `ClearXObligation`.
 2. **Policy engine** (`src/lib/clearx/policy.ts`) evaluates the proposed action against execution scope, network, recipient allowlist, and amount limits, returning `APPROVE`, `REVIEW`, or `BLOCK`.
 3. **Evidence verifier** (`src/lib/clearx/evidence.ts`) reads the actual transaction receipt and decoded ERC-20 `Transfer` event from the chain and checks it against the obligation, no self-reported claims.
-4. **On-chain settlement**: `AgenticCommerce.sol` escrows funds per job (Open → Funded → Submitted → Completed/Rejected/Expired) and `ClearXEvaluator.sol` releases or refunds payment once evidence is verified.
+4. **Evidence certificate** (`contracts/ClearXEvidenceCertificate.sol`): the independently observed evidence (transaction hash, recipient, amount) is hashed and bound into an EIP-712 typed digest. Two independent approvers each sign that exact digest off-chain; the contract verifies both signatures on-chain before marking the certificate as attested. This is a separate cryptographic attestation layer, distinct from the evaluator below — it proves what evidence was independently observed, not just that a threshold of votes was cast.
+5. **On-chain settlement**: `AgenticCommerce.sol` escrows funds per job (Open → Funded → Submitted → Completed/Rejected/Expired). `ClearXEvaluator.sol` is a separate 2-of-2 threshold contract — two independent approvers must each cast an on-chain vote before settlement releases. No single key can approve a payout alone, and the evaluator only votes after the evidence certificate above has already been verified.
 
 ## Contracts (X Layer Testnet, chain ID 1952)
 
@@ -43,4 +44,4 @@ node scripts/deploy-xlayer.mjs
 
 ## Built for
 
-OKX BuildX AI Season
+OKX BuildX AI Season / KeeperHub Agents Onchain Hackathon.
