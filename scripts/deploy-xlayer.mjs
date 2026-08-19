@@ -161,6 +161,11 @@ const evaluator = await deploy(
   [commerce.address, [account.address, approver2Account.address], 2n]
 );
 
+const evidenceCertificate = await deploy(
+  "ClearXEvidenceCertificate",
+  [[account.address, approver2Account.address], 2n]
+);
+
 const deployment = {
   network: "X Layer Testnet",
   chainId,
@@ -177,6 +182,12 @@ const deployment = {
     ClearXEvaluator: {
       address: evaluator.address,
       transactionHash: evaluator.hash,
+      approvers: [account.address, approver2Account.address],
+      threshold: 2,
+    },
+    ClearXEvidenceCertificate: {
+      address: evidenceCertificate.address,
+      transactionHash: evidenceCertificate.hash,
       approvers: [account.address, approver2Account.address],
       threshold: 2,
     },

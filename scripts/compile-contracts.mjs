@@ -8,6 +8,7 @@ const files = [
   "contracts/TestUSDC.sol",
   "contracts/AgenticCommerce.sol",
   "contracts/ClearXEvaluator.sol",
+  "contracts/ClearXEvidenceCertificate.sol",
 ];
 
 const sources = Object.fromEntries(
