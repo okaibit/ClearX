@@ -40,6 +40,13 @@ type ExecutionResult = {
     finalStatus?: number;
     completed?: boolean;
     evidenceHash?: string;
+    certificateId?: string;
+    certificateTransactionHash?: string;
+    certificateVerified?: boolean;
+    attestations?: Array<{
+      signer: string;
+      signature: string;
+    }>;
   };
   evidence?: {
     verified?: boolean;
@@ -68,6 +75,16 @@ type ExecutionResult = {
 
 const EXECUTOR =
   "0xD6aa751524A94161eAdfF44047266Fa8586F7A77";
+
+const X_LAYER_EXPLORER = "https://www.oklink.com/xlayer-test";
+
+function explorerTx(hash: string) {
+  return `${X_LAYER_EXPLORER}/tx/${hash}`;
+}
+
+function explorerAddress(address: string) {
+  return `${X_LAYER_EXPLORER}/address/${address}`;
+}
 
 function short(value?: string, start = 8, end = 6) {
   if (!value) return "—";
@@ -189,11 +206,18 @@ export default function Home() {
 
       const data = await response.json();
 
-      setExecutionResult(
-        response.ok
-          ? data
-          : { error: data.error ?? "Execution request failed." },
-      );
+      const result = response.ok
+        ? data
+        : { error: data.error ?? "Execution request failed." };
+
+      setExecutionResult(result);
+
+      if (response.ok) {
+        sessionStorage.setItem(
+          "clearx-verification-result",
+          JSON.stringify(result),
+        );
+      }
     } catch (error) {
       setExecutionResult({
         error:
@@ -271,9 +295,53 @@ export default function Home() {
 
           <p className="mx-auto mt-8 max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">
             ClearX turns an agent action into an enforceable obligation,
-            verifies the resulting blockchain evidence, and clears
-            settlement only when the evidence satisfies the obligation.
+            independently verifies the resulting blockchain evidence, and
+            requires a 2-of-2 cryptographic attestation before clearing
+            settlement. No single key can approve a payout alone.
           </p>
+        </div>
+      </section>
+
+      <section
+        id="architecture"
+        className="mx-auto max-w-7xl px-6 pb-20 lg:px-8"
+      >
+        <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-7 lg:p-10">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+            ClearX architecture
+          </p>
+
+          <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
+            From the instruction to the payout.
+          </h2>
+
+          <div className="mt-10 grid gap-3 md:grid-cols-6">
+            {[
+              ["01", "Obligation", "Agent action"],
+              ["02", "Policy", "Executable conditions"],
+              ["03", "ERC-8183", "Escrowed job"],
+              ["04", "Evidence", "Blockchain proof"],
+              ["05", "Certificate", "2-of-2 attestation"],
+              ["06", "Settlement", "Payment cleared"],
+            ].map(([number, title, body], index) => (
+              <div
+                key={number}
+                className="relative rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5"
+              >
+                <p className="text-xs text-[var(--muted)]">{number}</p>
+                <p className="mt-6 font-semibold">{title}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  {body}
+                </p>
+
+                {index < 5 && (
+                  <span className="absolute -right-2 top-1/2 hidden text-[var(--muted)] md:block">
+                    →
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -655,8 +723,7 @@ export default function Home() {
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
                     {settlementHeld
                       ? "ClearX detected an evidence mismatch. Settlement was held and no evaluator approval was broadcast."
-                      : executionResult.message ??
-                        executionResult.error}
+                      : executionResult.message ?? executionResult.error}
                   </p>
                 </div>
 
@@ -665,158 +732,198 @@ export default function Home() {
                     ✓
                   </div>
                 )}
-
-                {settlementHeld && (
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 text-3xl text-amber-500">
-                    !
-                  </div>
-                )}
               </div>
             </div>
 
             {!executionResult.error && (
               <div className="p-7 lg:p-10">
-                <div className="grid gap-3 md:grid-cols-4">
+                {executionResult.settlement?.certificateId && (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs uppercase tracking-[0.16em] text-emerald-500">
+                          Proof before payout
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                          <p className="text-lg font-semibold">
+                            2-of-2 evidence attestation
+                          </p>
+
+                          <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-500">
+                            {executionResult.settlement.certificateVerified
+                              ? "✓ VERIFIED"
+                              : "Pending"}
+                          </span>
+                        </div>
+
+                        <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                          Two independent approvers signed the same evidence
+                          payload and ClearX verified the certificate on-chain
+                          before settlement.
+                        </p>
+                      </div>
+
+                      <a
+                        href="/verification"
+                        className="shrink-0 rounded-xl border border-emerald-500/20 bg-[var(--background)] px-4 py-2.5 text-sm font-semibold text-emerald-500 transition hover:bg-emerald-500/10"
+                      >
+                        View verification proof
+                        <span className="ml-2">→</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {executionResult.transactionHash && (
+                  <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5">
+                    <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
+                      Payment onchain
+                    </p>
+
+                    <a
+                      href={explorerTx(executionResult.transactionHash)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 block break-all font-mono text-[11px] text-emerald-500 underline-offset-4 hover:underline"
+                    >
+                      {executionResult.transactionHash}
+                      <span className="ml-2 font-sans">
+                        ↗ Verify on OKLink
+                      </span>
+                    </a>
+                  </div>
+                )}
+
+                <div className="mt-10 grid gap-3 md:grid-cols-4">
                   {[
-                    ["01", "Policy", executionResult.decision === "APPROVE" ? "Satisfied" : "Blocked"],
-                    ["02", "Job", executionResult.settlement?.jobId ? `#${executionResult.settlement.jobId}` : "Created"],
-                    ["03", "Evidence", executionResult.evidence?.verified ? "Verified" : settlementHeld ? "Failed" : "Pending"],
-                    ["04", "Settlement", executionResult.settlement?.completed ? "Completed" : settlementHeld ? "Held" : "Pending"],
+                    [
+                      "01",
+                      "Policy",
+                      executionResult.decision === "APPROVE"
+                        ? "Satisfied"
+                        : "Blocked",
+                    ],
+                    [
+                      "02",
+                      "Job",
+                      executionResult.settlement?.jobId
+                        ? `#${executionResult.settlement.jobId}`
+                        : "Created",
+                    ],
+                    [
+                      "03",
+                      "Evidence",
+                      executionResult.evidence?.verified
+                        ? "Verified"
+                        : settlementHeld
+                          ? "Failed"
+                          : "Pending",
+                    ],
+                    [
+                      "04",
+                      "Settlement",
+                      executionResult.settlement?.completed
+                        ? "Completed"
+                        : settlementHeld
+                          ? "Held"
+                          : "Pending",
+                    ],
                   ].map(([number, title, value]) => (
                     <div
                       key={number}
-                      className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5"
+                      className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-4"
                     >
-                      <p className="text-xs text-[var(--muted)]">
-                        {number}
-                      </p>
+                      <p className="text-xs text-[var(--muted)]">{number}</p>
                       <p className="mt-5 text-xs uppercase tracking-wider text-[var(--muted)]">
                         {title}
                       </p>
-                      <p className="mt-1 text-lg font-semibold">
-                        {value}
-                      </p>
+                      <p className="mt-1 text-lg font-semibold">{value}</p>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-10 grid gap-8 lg:grid-cols-2">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-                      Blockchain evidence
-                    </p>
+                {executionResult.evidence?.checks &&
+                  executionResult.evidence.checks.length > 0 && (
+                    <div className="mt-10 grid gap-8 lg:grid-cols-2">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+                          What ClearX checked
+                        </p>
 
-                    <div className="mt-4 space-y-3">
-                      {executionResult.evidence?.checks?.map((check) => (
-                        <div
-                          key={check.name}
-                          className="flex items-center justify-between rounded-xl border border-[var(--border)] px-4 py-3"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">
-                              {check.name}
+                        <div className="mt-4 space-y-3">
+                          {executionResult.evidence.checks.map((check) => (
+                            <div
+                              key={check.name}
+                              className="flex items-center justify-between rounded-xl border border-[var(--border)] px-4 py-3"
+                            >
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {check.name}
+                                </p>
+                                <p className="mt-1 break-all font-mono text-[11px] text-[var(--muted)]">
+                                  {check.observed}
+                                </p>
+                              </div>
+
+                              <span className="text-xs font-semibold text-emerald-500">
+                                {check.status === "PASSED"
+                                  ? "✓ Passed"
+                                  : "× Failed"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+                          Settlement
+                        </p>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-[var(--border)] p-4">
+                            <p className="text-xs text-[var(--muted)]">
+                              ERC-8183 job
                             </p>
-                            <p className="mt-1 break-all font-mono text-[11px] text-[var(--muted)]">
-                              {check.observed}
+                            <p className="mt-1 font-mono text-sm">
+                              #{executionResult.settlement?.jobId ?? "—"}
                             </p>
                           </div>
 
-                          <span className="text-xs font-semibold text-emerald-500">
-                            {check.status === "PASSED" ? "✓ Passed" : "× Failed"}
-                          </span>
+                          <div className="rounded-xl border border-[var(--border)] p-4">
+                            <p className="text-xs text-[var(--muted)]">
+                              Settlement
+                            </p>
+                            <p
+                              className={`mt-1 text-sm font-semibold ${
+                                executionResult.settlement?.completed
+                                  ? "text-emerald-500"
+                                  : settlementHeld
+                                    ? "text-amber-500"
+                                    : "text-[var(--muted)]"
+                              }`}
+                            >
+                              {executionResult.settlement?.completed
+                                ? "Completed"
+                                : settlementHeld
+                                  ? "HELD — Not cleared"
+                                  : "Pending"}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-[var(--border)] p-4 sm:col-span-2">
+                            <p className="text-xs text-[var(--muted)]">
+                              Provider
+                            </p>
+                            <p className="mt-1 break-all font-mono text-xs">
+                              {executionResult.settlement?.provider ?? "—"}
+                            </p>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-                      Settlement
-                    </p>
-
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-[var(--border)] p-4">
-                        <p className="text-xs text-[var(--muted)]">
-                          ERC-8183 job
-                        </p>
-                        <p className="mt-1 font-mono text-sm">
-                          #{executionResult.settlement?.jobId ?? "—"}
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl border border-[var(--border)] p-4">
-                        <p className="text-xs text-[var(--muted)]">
-                          Settlement
-                        </p>
-                        <p className={`mt-1 text-sm font-semibold ${
-                          executionResult.settlement?.completed
-                            ? "text-emerald-500"
-                            : settlementHeld
-                              ? "text-amber-500"
-                              : "text-[var(--muted)]"
-                        }`}>
-                          {executionResult.settlement?.completed
-                            ? "Completed"
-                            : settlementHeld
-                              ? "HELD — Not cleared"
-                              : "Pending"}
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl border border-[var(--border)] p-4 sm:col-span-2">
-                        <p className="text-xs text-[var(--muted)]">
-                          Provider
-                        </p>
-                        <p className="mt-1 break-all font-mono text-xs">
-                          {executionResult.settlement?.provider ?? "—"}
-                        </p>
                       </div>
                     </div>
-                  </div>
-                </div>
-
-                {!settlementHeld && executionResult.transactionHash && (
-                <div className="mt-10 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
-                        Settlement transaction
-                      </p>
-                      <p className="mt-2 font-mono text-xs break-all">
-                        {executionResult.transactionHash}
-                      </p>
-                    </div>
-
-                    <span className="shrink-0 text-xs font-semibold text-emerald-500">
-                      Confirmed
-                    </span>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                    <div>
-                      <p className="text-xs text-[var(--muted)]">Block</p>
-                      <p className="mt-1 font-mono text-sm">
-                        {executionResult.blockNumber ?? "—"}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-[var(--muted)]">Chain</p>
-                      <p className="mt-1 text-sm">
-                        X Layer · {executionResult.chainId}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-[var(--muted)]">Evidence</p>
-                      <p className="mt-1 text-sm font-semibold text-emerald-500">
-                        Independently verified
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                )}
+                  )}
 
                 {settlementHeld && (
                   <div className="mt-10 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
@@ -827,108 +934,18 @@ export default function Home() {
                       Payment held
                     </p>
                     <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                      Independent blockchain evidence did not satisfy the obligation. No evaluator approval or settlement transaction was broadcast.
+                      Independent blockchain evidence did not satisfy the
+                      obligation. No evaluator approval or settlement
+                      transaction was broadcast.
                     </p>
                   </div>
                 )}
 
-                {executionResult.transactions &&
-                  executionResult.transactions.length > 0 && (
-                    <div className="mt-10">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-                        Onchain execution trail
-                      </p>
-
-                      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)]">
-                        {executionResult.transactions.map((tx, index) => (
-                          <div
-                            key={`${tx.step}-${tx.hash}`}
-                            className="flex flex-col gap-3 border-b border-[var(--border)] p-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--border)] text-xs font-semibold">
-                                {index + 1}
-                              </span>
-
-                              <div>
-                                <p className="text-sm font-medium">
-                                  {tx.step === "createJob"
-                                    ? "Create ERC-8183 job"
-                                    : tx.step === "setBudget"
-                                      ? "Set settlement budget"
-                                      : tx.step === "approve"
-                                        ? "Approve payment token"
-                                        : tx.step === "fund"
-                                          ? "Fund job"
-                                          : tx.step === "submit"
-                                            ? "Submit deliverable"
-                                            : tx.step === "agent.transfer"
-                                              ? "Agent obligation"
-                                              : tx.step === "evaluator.approve"
-                                                ? "ClearX evaluator approval"
-                                                : tx.step}
-                                </p>
-                                <p className="mt-1 break-all font-mono text-[11px] text-[var(--muted)]">
-                                  {tx.hash}
-                                </p>
-                              </div>
-                            </div>
-
-                            <span className="text-xs font-semibold text-emerald-500">
-                              Block {tx.blockNumber}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
               </div>
             )}
           </div>
         </section>
       )}
-
-      <section
-        id="architecture"
-        className="mx-auto max-w-7xl px-6 pb-28 lg:px-8"
-      >
-        <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-7 lg:p-10">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-            ClearX architecture
-          </p>
-
-          <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-            From agent intent to provable settlement.
-          </h2>
-
-          <div className="mt-10 grid gap-3 md:grid-cols-5">
-            {[
-              ["01", "Obligation", "Agent action"],
-              ["02", "Policy", "Executable conditions"],
-              ["03", "ERC-8183", "Escrowed job"],
-              ["04", "Evidence", "Blockchain proof"],
-              ["05", "Settlement", "Payment cleared"],
-            ].map(([number, title, body], index) => (
-              <div
-                key={number}
-                className="relative rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5"
-              >
-                <p className="text-xs text-[var(--muted)]">{number}</p>
-                <p className="mt-6 font-semibold">{title}</p>
-                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  {body}
-                </p>
-
-                {index < 4 && (
-                  <span className="absolute -right-2 top-1/2 hidden text-[var(--muted)] md:block">
-                    →
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-28 lg:px-8">
         <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-7 lg:p-10">
