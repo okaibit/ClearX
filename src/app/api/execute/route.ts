@@ -38,11 +38,30 @@ function getPrivateKey() {
   return value as `0x${string}`;
 }
 
+function getApprover2PrivateKey() {
+  const value = process.env.CLEARX_APPROVER2_PRIVATE_KEY;
+
+  if (!value) {
+    throw new Error(
+      "CLEARX_APPROVER2_PRIVATE_KEY is not configured.",
+    );
+  }
+
+  if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(
+      "CLEARX_APPROVER2_PRIVATE_KEY must be a 32-byte hex private key.",
+    );
+  }
+
+  return value as `0x${string}`;
+}
+
 const rpcUrl =
   process.env.X_LAYER_TESTNET_RPC_URL ||
   xLayerTestnet.rpcUrls.default.http[0];
 
 const account = privateKeyToAccount(getPrivateKey());
+const approver2Account = privateKeyToAccount(getApprover2PrivateKey());
 
 const publicClient = createPublicClient({
   chain: xLayerTestnet,
@@ -51,6 +70,12 @@ const publicClient = createPublicClient({
 
 const walletClient = createWalletClient({
   account,
+  chain: xLayerTestnet,
+  transport: http(rpcUrl),
+});
+
+const approver2WalletClient = createWalletClient({
+  account: approver2Account,
   chain: xLayerTestnet,
   transport: http(rpcUrl),
 });
@@ -68,6 +93,29 @@ async function sendContract(
   console.log(`[ClearX] ${label}`);
 
   const hash = await walletClient.writeContract(request);
+
+  const receipt =
+    await publicClient.waitForTransactionReceipt({
+      hash,
+    });
+
+  if (receipt.status !== "success") {
+    throw new Error(`${label} transaction failed.`);
+  }
+
+  return {
+    hash,
+    blockNumber: receipt.blockNumber,
+  };
+}
+
+async function sendAsApprover2(
+  label: string,
+  request: Parameters<typeof approver2WalletClient.writeContract>[0],
+) {
+  console.log(`[ClearX] ${label}`);
+
+  const hash = await approver2WalletClient.writeContract(request);
 
   const receipt =
     await publicClient.waitForTransactionReceipt({
@@ -454,10 +502,10 @@ export async function POST(request: Request) {
       });
     }
 
-    // 8. Evidence passed. ONLY NOW can ClearX approve the
-    // ERC-8183-style commerce job and release settlement.
-    const evaluation = await sendContract(
-      "ClearX evaluator approving evidence",
+    // 8. Evidence passed. Two independent approvers must each cast
+    // a vote before the evaluator's threshold releases settlement.
+    const approval1 = await sendContract(
+      "ClearX evaluator: approver 1 voting",
       {
         address: EVALUATOR,
         abi: evaluator.abi,
@@ -467,7 +515,23 @@ export async function POST(request: Request) {
     );
 
     transactions.push({
-      step: "evaluator.approve",
+      step: "evaluator.approve (1 of 2)",
+      hash: approval1.hash,
+      blockNumber: approval1.blockNumber.toString(),
+    });
+
+    const evaluation = await sendAsApprover2(
+      "ClearX evaluator: approver 2 voting",
+      {
+        address: EVALUATOR,
+        abi: evaluator.abi,
+        functionName: "approve",
+        args: [jobId, evidenceHash],
+      },
+    );
+
+    transactions.push({
+      step: "evaluator.approve (2 of 2, threshold met)",
       hash: evaluation.hash,
       blockNumber: evaluation.blockNumber.toString(),
     });

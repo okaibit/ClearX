@@ -4,17 +4,22 @@
   "deployer": "0xD6aa751524A94161eAdfF44047266Fa8586F7A77",
   "contracts": {
     "TestUSDC": {
-      "address": "0x771fe2efa6208a738cafb7a06c0d272d8eae6d70",
-      "transactionHash": "0x662766a08ab35957b04d4466c494b07bfa191a23daa980f01692c1a83b047f48"
+      "address": "0x27578d9d56db9237c8440f0afa09f8251d916095",
+      "transactionHash": "0x7ade1ac2ebd651bd635fb58938c30071c7e69ad3b1544052ca57b1f65b2b2540"
     },
     "AgenticCommerce": {
-      "address": "0x3b92251ab1caa54c755595c77126319fe02a5dc5",
-      "transactionHash": "0x1b4ff5033fb2f534ecb66caab7bd085b5cefd0c1a3c4b774a725036938c2b678"
+      "address": "0x1de079b6db054b6679eea2575385a9fb2360647c",
+      "transactionHash": "0xa2eb5bf867d29883a9dbc50f0ba66823ef398a67048fa01a9bdb4f69cc086e78"
     },
     "ClearXEvaluator": {
-      "address": "0xd75d6cdf537e1ea30d2c7b03a1b1eafebc7d2ac9",
-      "transactionHash": "0xc24a4d6b2951f1997347fba3eb23588d3fd81f9d729baa6dbdb7fb63d03c1243"
+      "address": "0x181d9572b6eec29fefedf30f426ece5d3936cd97",
+      "transactionHash": "0x5f26ffaccdf33002e777d187e1d90ebb40bf3231321ea0cf598e07a8ee56899c",
+      "approvers": [
+        "0xD6aa751524A94161eAdfF44047266Fa8586F7A77",
+        "0xC067Fa683514881B4E5F468fE87920A441e88687"
+      ],
+      "threshold": 2
     }
   },
-  "deployedAt": "2026-08-15T03:58:52.121Z"
+  "deployedAt": "2026-08-19T13:48:07.237Z"
 }

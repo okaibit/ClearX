@@ -10,34 +10,39 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 
-const envPath = new URL("../.env.local", import.meta.url);
+const root = process.cwd();
+
+const envPath = path.join(root, ".env.local");
+
 if (fs.existsSync(envPath)) {
   const envText = fs.readFileSync(envPath, "utf8");
-  for (const line of envText.split(/\\r?\\n/)) {
+
+  for (const line of envText.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) continue;
+
+    if (
+      !trimmed ||
+      trimmed.startsWith("#") ||
+      !trimmed.includes("=")
+    ) {
+      continue;
+    }
 
     const index = trimmed.indexOf("=");
-    const key = trimmed.slice(0, index);
-    const value = trimmed.slice(index + 1);
+    const key = trimmed.slice(0, index).trim();
+    const value = trimmed.slice(index + 1).trim();
 
-    if (!(key in process.env)) {
-      process.env[key] = value;
-    }
+    process.env[key] = value;
   }
 }
-
-const root = process.cwd();
 
 const rpcUrl =
   process.env.X_LAYER_TESTNET_RPC_URL ||
   process.env.X_LAYER_RPC_URL;
 
-const privateKey =
-  process.env.DEPLOYER_PRIVATE_KEY ||
-  process.env.CLEARX_EXECUTOR_PRIVATE_KEY ||
-  process.env.PRIVATE_KEY ||
-  process.env.WALLET_PRIVATE_KEY;
+const privateKey = process.env.CLEARX_EXECUTOR_PRIVATE_KEY;
+
+const approver2PrivateKey = process.env.CLEARX_APPROVER2_PRIVATE_KEY;
 
 if (!rpcUrl) {
   throw new Error(
@@ -50,6 +55,18 @@ if (!privateKey) {
     "Missing CLEARX_EXECUTOR_PRIVATE_KEY in .env.local"
   );
 }
+
+if (!approver2PrivateKey) {
+  throw new Error(
+    "Missing CLEARX_APPROVER2_PRIVATE_KEY in .env.local (second evaluator approver)"
+  );
+}
+
+const normalizedApprover2Key = approver2PrivateKey.startsWith("0x")
+  ? approver2PrivateKey
+  : `0x${approver2PrivateKey}`;
+
+const approver2Account = privateKeyToAccount(normalizedApprover2Key);
 
 const normalizedKey = privateKey.startsWith("0x")
   ? privateKey
@@ -141,7 +158,7 @@ const commerce = await deploy(
 
 const evaluator = await deploy(
   "ClearXEvaluator",
-  [commerce.address]
+  [commerce.address, [account.address, approver2Account.address], 2n]
 );
 
 const deployment = {
@@ -160,6 +177,8 @@ const deployment = {
     ClearXEvaluator: {
       address: evaluator.address,
       transactionHash: evaluator.hash,
+      approvers: [account.address, approver2Account.address],
+      threshold: 2,
     },
   },
   deployedAt: new Date().toISOString(),

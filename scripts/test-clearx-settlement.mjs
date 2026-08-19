@@ -85,6 +85,20 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(providerPrivateKey)) {
 
 const providerAccount = privateKeyToAccount(providerPrivateKey);
 
+const approver2PrivateKey = process.env.CLEARX_APPROVER2_PRIVATE_KEY;
+
+if (!approver2PrivateKey) {
+  throw new Error("CLEARX_APPROVER2_PRIVATE_KEY is missing.");
+}
+
+if (!/^0x[0-9a-fA-F]{64}$/.test(approver2PrivateKey)) {
+  throw new Error(
+    "CLEARX_APPROVER2_PRIVATE_KEY must be a 32-byte hex private key."
+  );
+}
+
+const approver2Account = privateKeyToAccount(approver2PrivateKey);
+
 const publicClient = createPublicClient({
   transport: http(rpcUrl),
 });
@@ -96,6 +110,11 @@ const walletClient = createWalletClient({
 
 const providerWalletClient = createWalletClient({
   account: providerAccount,
+  transport: http(rpcUrl),
+});
+
+const approver2WalletClient = createWalletClient({
+  account: approver2Account,
   transport: http(rpcUrl),
 });
 
@@ -132,7 +151,12 @@ console.log("CLEARX REAL SETTLEMENT TEST");
 console.log("=================================");
 console.log("Client:", account.address);
 console.log("Provider:", providerAccount.address);
-console.log("Roles separated:", account.address.toLowerCase() !== providerAccount.address.toLowerCase());
+console.log("Approver #1:", account.address);
+console.log("Approver #2:", approver2Account.address);
+console.log(
+  "Client/provider roles separated:",
+  account.address.toLowerCase() !== providerAccount.address.toLowerCase()
+);
 console.log("Chain:", await publicClient.getChainId());
 console.log("TestUSDC:", USDC);
 console.log("AgenticCommerce:", COMMERCE);
@@ -175,7 +199,7 @@ const expiry =
   BigInt(Math.floor(Date.now() / 1000) + 3600);
 
 const createHash = await send(
-  "1/7 Creating job",
+  "1/8 Creating job",
   {
     address: COMMERCE,
     abi: commerce.abi,
@@ -207,34 +231,28 @@ const createReceipt =
     hash: createHash,
   });
 
-const jobCreatedLogs = await publicClient.getLogs({
-  address: COMMERCE,
-  event: jobCreatedEvent,
-  fromBlock: createReceipt.blockNumber,
-  toBlock: createReceipt.blockNumber,
-});
+const jobCreatedLog = createReceipt.logs.find(
+  (log) =>
+    log.address.toLowerCase() === COMMERCE.toLowerCase() &&
+    log.topics[0] ===
+      "0xb0f0239bfdd96453e24733e18bfc24b70d8fadf123dd977473518dd577ee79b9"
+);
 
-if (jobCreatedLogs.length === 0) {
+if (!jobCreatedLog || !jobCreatedLog.topics[1]) {
   throw new Error(
-    "Could not extract the AgenticCommerce job ID from the JobCreated event."
+    "Could not extract the AgenticCommerce JobCreated event from the transaction receipt."
   );
 }
 
-const createdArgs = jobCreatedLogs[0].args;
+const actualJobId = BigInt(jobCreatedLog.topics[1]);
 
-if (createdArgs.jobId === undefined) {
-  throw new Error(
-    "JobCreated event did not contain a jobId."
-  );
-}
-
-const actualJobId = createdArgs.jobId;
+console.log("Job ID:", actualJobId.toString());
 
 console.log("Job ID:", actualJobId.toString());
 
 // 2. Set budget
 await send(
-  "2/7 Setting 1 cUSDC budget",
+  "2/8 Setting 1 cUSDC budget",
   {
     address: COMMERCE,
     abi: commerce.abi,
@@ -245,7 +263,7 @@ await send(
 
 // 3. Approve commerce contract to spend TestUSDC
 await send(
-  "3/7 Approving TestUSDC",
+  "3/8 Approving TestUSDC",
   {
     address: USDC,
     abi: usdc.abi,
@@ -256,7 +274,7 @@ await send(
 
 // 4. Fund job
 await send(
-  "4/7 Funding job",
+  "4/8 Funding job",
   {
     address: COMMERCE,
     abi: commerce.abi,
@@ -292,12 +310,13 @@ if (submitReceipt.status !== "success") {
   throw new Error("Provider submit transaction failed.");
 }
 
-// 6. ClearX evaluator approves evidence
+// 6. ClearX evaluator: approver #1 votes
+
 const evidenceHash =
   "0x2222222222222222222222222222222222222222222222222222222222222222";
 
 await send(
-  "6/7 ClearX evaluator approving evidence",
+  "6/8 ClearX evaluator: approver #1 voting (1 of 2)",
   {
     address: EVALUATOR,
     abi: evaluator.abi,
@@ -305,6 +324,77 @@ await send(
     args: [actualJobId, evidenceHash],
   }
 );
+
+// Verify that approver #1's vote was recorded and one vote
+// is NOT enough to execute settlement.
+const approver1Voted = await publicClient.readContract({
+  address: EVALUATOR,
+  abi: evaluator.abi,
+  functionName: "hasVoted",
+  args: [actualJobId, account.address],
+});
+
+const afterFirstVote = await publicClient.readContract({
+  address: EVALUATOR,
+  abi: evaluator.abi,
+  functionName: "voteCounts",
+  args: [actualJobId],
+});
+
+console.log(
+  "After approver #1:",
+  "hasVoted=",
+  approver1Voted,
+  "approveCount=",
+  afterFirstVote[0].toString(),
+  "rejectCount=",
+  afterFirstVote[1].toString(),
+  "executed=",
+  afterFirstVote[2]
+);
+
+if (!approver1Voted) {
+  throw new Error(
+    "Approver #1 vote was not recorded on-chain."
+  );
+}
+
+if (afterFirstVote[0] !== 1n) {
+  throw new Error(
+    `Expected 1 approval after approver #1, received ${afterFirstVote[0].toString()}.`
+  );
+}
+
+if (afterFirstVote[2] !== false) {
+  throw new Error(
+    "Settlement executed after only one approval."
+  );
+}
+
+// 7. ClearX evaluator: approver #2 votes and reaches threshold
+
+console.log("\n7/8 ClearX evaluator: approver #2 voting (2 of 2)...");
+
+const approval2Hash = await approver2WalletClient.writeContract({
+  address: EVALUATOR,
+  abi: evaluator.abi,
+  functionName: "approve",
+  args: [actualJobId, evidenceHash],
+});
+
+console.log(`tx: ${approval2Hash}`);
+
+const approval2Receipt =
+  await publicClient.waitForTransactionReceipt({
+    hash: approval2Hash,
+  });
+
+console.log(`status: ${approval2Receipt.status}`);
+console.log(`block: ${approval2Receipt.blockNumber}`);
+
+if (approval2Receipt.status !== "success") {
+  throw new Error("Approver #2 transaction failed.");
+}
 
 // 7. Verify final state
 const job =
@@ -387,6 +477,6 @@ console.log(
 
 console.log("\nTransaction evidence:");
 console.log("Create:", createHash);
-console.log("Fund / Approve / Submit / Complete: see transactions above");
+console.log("Fund / Approve / Submit / Approver #1 / Approver #2 / Complete: see transactions above");
 
 console.log("\nCLEARX ON-CHAIN SETTLEMENT VERIFIED.");

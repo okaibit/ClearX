@@ -1,0 +1,68 @@
+{
+  "title": "ClearX On-Chain Verification",
+  "verifiedAt": "2026-08-19T14:10:30.914Z",
+  "network": "X Layer Testnet",
+  "chainId": 1952,
+  "contracts": {
+    "TestUSDC": "0x27578d9d56db9237c8440f0afa09f8251d916095",
+    "AgenticCommerce": "0x1de079b6db054b6679eea2575385a9fb2360647c",
+    "ClearXEvaluator": "0x181d9572b6eec29fefedf30f426ece5d3936cd97"
+  },
+  "evaluator": {
+    "threshold": "2",
+    "approverCount": "2",
+    "approver1": "0xD6aa751524A94161eAdfF44047266Fa8586F7A77",
+    "approver2": "0xC067Fa683514881B4E5F468fE87920A441e88687",
+    "approver1Voted": true,
+    "approver2Voted": true,
+    "approveCount": "2",
+    "rejectCount": "0",
+    "executed": true
+  },
+  "job": {
+    "jobId": "4",
+    "client": "0xD6aa751524A94161eAdfF44047266Fa8586F7A77",
+    "provider": "0xd65Bb2dC678d9f192B5f69Ded613c22C5eF6A6B3",
+    "evaluator": "0x181D9572B6eec29FEfeDf30f426eCE5d3936CD97",
+    "description": "ClearX agentic commerce settlement test",
+    "budgetBaseUnits": "1000000",
+    "budgetCUSDC": "1",
+    "status": 3,
+    "statusName": "Completed",
+    "hook": "0x0000000000000000000000000000000000000000",
+    "deliverable": "0x1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "balances": {
+    "clientCUSDC": "999999999999999998",
+    "providerCUSDC": "1",
+    "providerReceivedAtLeastOneCUSDC": true
+  },
+  "assertions": {
+    "total": 20,
+    "passed": 20,
+    "failed": 0,
+    "allPassed": true
+  },
+  "checks": {
+    "Chain ID is 1952": true,
+    "TestUSDC contract deployed": true,
+    "AgenticCommerce contract deployed": true,
+    "ClearXEvaluator contract deployed": true,
+    "Evaluator threshold is 2": true,
+    "Exactly 2 approvers registered": true,
+    "Approver #1 matches deployment": true,
+    "Approver #2 matches deployment": true,
+    "Approver #1 voted": true,
+    "Approver #2 voted": true,
+    "Approval count reached 2": true,
+    "No rejection votes": true,
+    "Evaluator executed": true,
+    "Job client is correct": true,
+    "Job provider is correct": true,
+    "Job evaluator is correct": true,
+    "Job budget is 1 cUSDC": true,
+    "Job status is Completed (3)": true,
+    "Provider received 1 cUSDC": true,
+    "Evaluator has deployed bytecode": true
+  }
+}
