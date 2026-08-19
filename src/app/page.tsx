@@ -305,11 +305,14 @@ export default function Home() {
               </p>
 
               <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5">
-                <p className="text-sm leading-7">
-                  Transfer{" "}
-                  <span className="font-semibold">{amount} OKB</span>{" "}
-                  to the configured provider on{" "}
-                  <span className="font-semibold">X Layer</span>.
+                <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Agent instruction
+                </p>
+                <p className="mt-2 text-sm leading-7">
+                  &ldquo;Pay the provider{" "}
+                  <span className="font-semibold">{amount} OKB</span> on{" "}
+                  <span className="font-semibold">X Layer</span> once the
+                  job is verified.&rdquo;
                 </p>
               </div>
 
