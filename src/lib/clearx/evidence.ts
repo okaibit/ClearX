@@ -89,6 +89,39 @@ export async function verifyTransferEvidence({
     };
   }
 
+  // X Layer can briefly expose a transaction receipt before the
+  // corresponding block is available to eth_getLogs. Wait for the
+  // block to become queryable before extracting independent evidence.
+  let blockAvailable = false;
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      await client.getBlock({
+        blockNumber: receipt.blockNumber,
+      });
+      blockAvailable = true;
+      break;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+
+  if (!blockAvailable) {
+    return {
+      verified: false,
+      checks: [
+        {
+          name: "Evidence block availability",
+          status: "FAILED",
+          expected: receipt.blockNumber.toString(),
+          observed: "RPC block unavailable",
+        },
+      ],
+      reason:
+        "The transaction receipt exists, but the X Layer RPC has not yet exposed the corresponding block for evidence queries.",
+    };
+  }
+
   const logs = await client.getLogs({
     address: tokenAddress,
     event: erc20TransferAbi[0],
