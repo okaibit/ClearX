@@ -63,26 +63,6 @@ const rpcUrl =
   process.env.X_LAYER_TESTNET_RPC_URL ||
   xLayerTestnet.rpcUrls.default.http[0];
 
-const account = privateKeyToAccount(getPrivateKey());
-const approver2Account = privateKeyToAccount(getApprover2PrivateKey());
-
-const publicClient = createPublicClient({
-  chain: xLayerTestnet,
-  transport: http(rpcUrl),
-});
-
-const walletClient = createWalletClient({
-  account,
-  chain: xLayerTestnet,
-  transport: http(rpcUrl),
-});
-
-const approver2WalletClient = createWalletClient({
-  account: approver2Account,
-  chain: xLayerTestnet,
-  transport: http(rpcUrl),
-});
-
 const USDC = deployment.contracts.TestUSDC.address as `0x${string}`;
 const COMMERCE =
   deployment.contracts.AgenticCommerce.address as `0x${string}`;
@@ -92,54 +72,74 @@ const EVALUATOR =
 const EVIDENCE_CERTIFICATE =
   deployment.contracts.ClearXEvidenceCertificate.address as `0x${string}`;
 
-async function sendContract(
-  label: string,
-  request: Parameters<typeof walletClient.writeContract>[0],
-) {
-  console.log(`[ClearX] ${label}`);
-
-  const hash = await walletClient.writeContract(request);
-
-  const receipt =
-    await publicClient.waitForTransactionReceipt({
-      hash,
-    });
-
-  if (receipt.status !== "success") {
-    throw new Error(`${label} transaction failed.`);
-  }
-
-  return {
-    hash,
-    blockNumber: receipt.blockNumber,
-  };
-}
-
-async function sendAsApprover2(
-  label: string,
-  request: Parameters<typeof approver2WalletClient.writeContract>[0],
-) {
-  console.log(`[ClearX] ${label}`);
-
-  const hash = await approver2WalletClient.writeContract(request);
-
-  const receipt =
-    await publicClient.waitForTransactionReceipt({
-      hash,
-    });
-
-  if (receipt.status !== "success") {
-    throw new Error(`${label} transaction failed.`);
-  }
-
-  return {
-    hash,
-    blockNumber: receipt.blockNumber,
-  };
-}
-
 export async function POST(request: Request) {
   try {
+    const account = privateKeyToAccount(getPrivateKey());
+    const approver2Account = privateKeyToAccount(getApprover2PrivateKey());
+
+    const publicClient = createPublicClient({
+      chain: xLayerTestnet,
+      transport: http(rpcUrl),
+    });
+
+    const walletClient = createWalletClient({
+      account,
+      chain: xLayerTestnet,
+      transport: http(rpcUrl),
+    });
+
+    const approver2WalletClient = createWalletClient({
+      account: approver2Account,
+      chain: xLayerTestnet,
+      transport: http(rpcUrl),
+    });
+
+    async function sendContract(
+      label: string,
+      request: Parameters<typeof walletClient.writeContract>[0],
+    ) {
+      console.log(`[ClearX] ${label}`);
+
+      const hash = await walletClient.writeContract(request);
+
+      const receipt =
+        await publicClient.waitForTransactionReceipt({
+          hash,
+        });
+
+      if (receipt.status !== "success") {
+        throw new Error(`${label} transaction failed.`);
+      }
+
+      return {
+        hash,
+        blockNumber: receipt.blockNumber,
+      };
+    }
+
+    async function sendAsApprover2(
+      label: string,
+      request: Parameters<typeof approver2WalletClient.writeContract>[0],
+    ) {
+      console.log(`[ClearX] ${label}`);
+
+      const hash = await approver2WalletClient.writeContract(request);
+
+      const receipt =
+        await publicClient.waitForTransactionReceipt({
+          hash,
+        });
+
+      if (receipt.status !== "success") {
+        throw new Error(`${label} transaction failed.`);
+      }
+
+      return {
+        hash,
+        blockNumber: receipt.blockNumber,
+      };
+    }
+
     const body = await request.json();
 
     const agent = body?.agent;
